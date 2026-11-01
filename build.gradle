@@ -1,0 +1,56 @@
+plugins {
+    id 'java'
+    id 'org.springframework.boot' version '3.3.5'
+    id 'io.spring.dependency-management' version '1.1.6'
+}
+
+group = 'com.indie'
+version = '0.0.1'
+
+java { toolchain { languageVersion = JavaLanguageVersion.of(21) } }
+
+repositories { mavenCentral() }
+
+ext { set('springCloudVersion', '2023.0.3') }
+
+dependencies {
+    // Gateway 본체
+    implementation 'org.springframework.cloud:spring-cloud-starter-gateway'
+
+    // 서비스 디스커버리 — k8s API 를 레지스트리로
+    // (명세의 "-fabric8-discovery" 는 존재하지 않는 아티팩트 — 디스커버리 스타터는 이 이름입니다)
+    implementation 'org.springframework.cloud:spring-cloud-starter-kubernetes-fabric8'
+    implementation 'org.springframework.cloud:spring-cloud-starter-loadbalancer'
+
+    // OAuth2 클라이언트 (카카오 · 구글) — WebFlux 용
+    implementation 'org.springframework.boot:spring-boot-starter-oauth2-client'
+    implementation 'org.springframework.boot:spring-boot-starter-security'
+
+    // JWT — 검증(RS256) · 내부토큰 발급(HS256)
+    implementation 'com.nimbusds:nimbus-jose-jwt:9.40'
+
+    // Redis (reactive) — 인증용 · 캐시용
+    implementation 'org.springframework.boot:spring-boot-starter-data-redis-reactive'
+
+    // Circuit Breaker · Retry
+    implementation 'org.springframework.cloud:spring-cloud-starter-circuitbreaker-reactor-resilience4j'
+
+    // 관측
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'
+    runtimeOnly 'io.micrometer:micrometer-registry-prometheus'
+    implementation 'io.micrometer:context-propagation'      // Reactor Context → MDC (correlationId)
+
+    // 검증 · 로그
+    implementation 'org.springframework.boot:spring-boot-starter-validation'
+    implementation 'net.logstash.logback:logstash-logback-encoder:7.4'
+
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'io.projectreactor:reactor-test'
+    testImplementation 'org.testcontainers:junit-jupiter:1.20.3'
+}
+
+dependencyManagement {
+    imports { mavenBom "org.springframework.cloud:spring-cloud-dependencies:${springCloudVersion}" }
+}
+
+tasks.named('test') { useJUnitPlatform() }

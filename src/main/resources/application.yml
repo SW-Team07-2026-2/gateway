@@ -1,0 +1,143 @@
+spring:
+  application.name: gateway
+  config.import: optional:configtree:/etc/secrets/      # ★ 시크릿은 파일에서
+  main.web-application-type: reactive
+  reactor.context-propagation: auto                     # Reactor Context → MDC
+
+  cloud:
+    kubernetes:
+      discovery:
+        enabled: true
+        all-namespaces: false
+      reload.enabled: false
+    gateway:
+      httpclient:
+        connect-timeout: 2000
+        response-timeout: 5s                            # Gateway 상한
+      default-filters:
+        - DedupeResponseHeader=Access-Control-Allow-Origin Access-Control-Allow-Credentials RETAIN_UNIQUE
+      globalcors:
+        cors-configurations:
+          '[/**]':
+            allowed-origins: ${app.cors.origins}
+            allowed-methods: [GET, POST, PUT, PATCH, DELETE, OPTIONS]
+            allowed-headers: ['*']
+            allow-credentials: true                     # ★ 쿠키 인증이라 필수
+            max-age: 3600
+
+  data.redis:
+    timeout: 300ms
+    client-type: lettuce
+
+  security.oauth2.client:
+    registration:
+      kakao:
+        client-id: ${OAUTH_KAKAO_CLIENT_ID:unset}
+        client-secret: ${oauth.kakao.client-secret:}      # ← configtree
+        client-name: kakao
+        redirect-uri: "${app.oauth.redirect-base}/oauth2/code/kakao"   # ★ 절대경로 · /oauth2/* 아래 (SecurityConfig 콜백 매처와 같게)
+        authorization-grant-type: authorization_code
+        client-authentication-method: client_secret_post  # ★ 카카오는 POST
+        scope: [profile_nickname, account_email]   # 약관 동의는 카카오 싱크 — 동의 화면에 약관이 함께 뜹니다 (콘솔 › 간편가입) · 10/28 Google 로그인 없음
+    provider:
+      kakao:
+        authorization-uri: https://kauth.kakao.com/oauth/authorize
+        token-uri: https://kauth.kakao.com/oauth/token
+        user-info-uri: https://kapi.kakao.com/v2/user/me
+        user-name-attribute: id
+
+server:
+  port: 8080
+  forward-headers-strategy: framework                   # ★ ALB · Cloudflare 뒤
+  shutdown: graceful
+  netty.max-initial-line-length: 8192
+
+management:
+  server.port: 8090                                     # ★ 트래픽 포트와 분리
+  endpoints.web.exposure.include: health,info,prometheus
+  endpoint.health:
+    probes.enabled: true
+    group:
+      readiness.include: ping                           # 🔴 다운스트림 포함 금지 (§12)
+      liveness.include: ping
+  metrics.tags.application: gateway
+
+app:
+  domain: ${APP_DOMAIN:localhost}                       # TODO(결정대기): 도메인 미구매 (§18-4)
+  cookie:
+    domain: ${COOKIE_DOMAIN}                            # ★ 앞에 점 (.example.com)
+    secure: true
+    same-site: Lax
+    at-max-age: 1800
+    rt-max-age: 1209600
+    signup-max-age: 1800                                # 사인업 토큰 — Member app.signup.ttl-seconds 와 같게
+  token:
+    issuer: indie-member
+    refresh-threshold-seconds: 300                      # 만료 5분 전 선제 갱신
+    jwks-uri: http://member:8081/.well-known/jwks.json
+    jwks-cache-ttl: 10m
+    jwks-refetch-cooldown: 30s
+    fallback-public-key-path: /etc/jwt/public.pem       # ConfigMap jwt-public-key
+  internal-token:
+    issuer: gateway
+    audience: member
+    ttl-seconds: 300
+  member-base-url: http://member:8081
+  oauth:
+    redirect-base: https://api.${app.domain}
+    success-redirect: https://${app.domain}/            # ★ 허용 목록 — 고정값만
+    signup-redirect: https://${app.domain}/signup       # 처음 로그인 → 밴드 고르기 (SIGNUP 쿠키)
+    failure-redirect: https://${app.domain}/login
+  sanity:                                               # ⓪ 필터 한계값 (§5-⓪)
+    max-body-bytes: 1048576                             # 1 MiB
+    max-upload-bytes: 10485760                          # 10 MiB — 무대 이미지 경로만
+    upload-path-prefix: /api/studio/
+    max-query-params: 30
+    max-query-key-length: 64
+    max-header-bytes: 8192
+    max-path-segments: 20
+    allowed-hosts: ["api.${app.domain}"]
+  trust:
+    proxy-depth: 1                                      # XFF 신뢰 깊이 (§5-⑥)
+  redis:
+    cache: { host: "${spring.data.redis.host:localhost}", port: 6379 }
+  ingest:                                               # 수집 /ingest/** (docs/22 §1-4) — 키는 시크릿 ingest.keys.<키 ID> (configtree)
+    hosts: [gateway, gateway.indie, gateway.indie.svc, gateway.indie.svc.cluster.local]   # G1 — 클러스터 안 Service 주소로 온 것만
+    clock-skew-seconds: 300                             # G5 — 수집기 시계가 이만큼 어긋나면 401
+    nonce-ttl: 600s                                     # G5 — 허용 범위의 2배
+    body-read-timeout: 10s                              # G3 — 1 MiB 가 10초 안에 다 안 오면 408
+    response-timeout: 30s                               # 하위 서비스 응답 상한 (500건 건별 트랜잭션) → 넘으면 504
+    token-ttl-seconds: 60                               # G9 — 하위로 보내는 X-Internal-Token
+    max-depth: 10                                       # G6 — JSON 중첩 깊이
+
+resilience4j:
+  circuitbreaker:
+    configs.default:
+      sliding-window-type: COUNT_BASED
+      sliding-window-size: 20
+      failure-rate-threshold: 50
+      wait-duration-in-open-state: 10s
+      permitted-number-of-calls-in-half-open-state: 3
+    instances:
+      member:    { base-config: default }
+      catalog:   { base-config: default }
+      concert:   { base-config: default }
+      payment:   { base-config: default, failure-rate-threshold: 70 }   # 결제는 더 참는다
+      chatbot:   { base-config: default, sliding-window-size: 10 }
+      admin-ai:  { base-config: default, sliding-window-size: 10 }
+      studio:    { base-config: default }
+      ingest-catalog: { base-config: default }          # 수집 전용 — 큰 배치가 느려도 사용자 경로의 catalog CB 는 열리지 않게
+      ingest-concert: { base-config: default }
+      ingest-chatbot: { base-config: default }
+  timelimiter:                                          # 기본 1s 가 응답 타임아웃(5s)보다 먼저 끊지 않게
+    configs.default.timeout-duration: 5s
+    instances:
+      chatbot:   { timeout-duration: 30s }
+      admin-ai:  { timeout-duration: 60s }
+      ingest-catalog: { timeout-duration: 35s }         # 응답 타임아웃(30s)이 먼저 끊어 504 로 구분되게
+      ingest-concert: { timeout-duration: 35s }
+      ingest-chatbot: { timeout-duration: 35s }
+
+logging.level:
+  org.springframework.cloud.gateway: INFO
+  com.indie.gateway.global.filter: INFO
