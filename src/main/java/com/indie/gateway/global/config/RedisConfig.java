@@ -13,9 +13,10 @@ import org.springframework.data.redis.core.ReactiveStringRedisTemplate;
 /**
  * Redis 2개를 구분해서 씁니다 (§9).
  * <pre>
- * authRedis  (AZ-a · noeviction)   member:blacklist:{jti} · auth:profile:{userId} · auth:refresh:lock:{jti}
- * cacheRedis (AZ-c · allkeys-lru)  request_rate_limiter.*
+ * authRedis  (AZ-a · noeviction)   member:blacklist:{jti} · auth:refresh:lock:{jti} · ingest:nonce:{키 ID}:{nonce}
+ * cacheRedis (AZ-c · allkeys-lru)  request_rate_limiter.* · auth:profile:{userId}
  * </pre>
+ * 기준 (50A): 지워지면 안 되는 것만 인증용 — 지워져도 다시 만들 수 있는 것은 캐시용.
  * 🔴 블랙리스트를 캐시용(LRU)에 두면 메모리 압박 시 조용히 밀려나 로그아웃이 무효화됩니다.
  * 빈 이름(@Qualifier)으로 실수를 막습니다.
  */

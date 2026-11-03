@@ -33,7 +33,7 @@ app:
   ingest:
     hosts: [localhost, 127.0.0.1]           # 로컬 수집 스크립트 → http://localhost:8080/ingest/**
   redis:
-    cache: { host: localhost, port: 6380 }  # 캐시용 — rate limit
+    cache: { host: localhost, port: 6380 }  # 캐시용 — rate limit · 프로필 캐시 (50A)
 
 logging:
   pattern.console: "%d{HH:mm:ss.SSS} %-5level [%X{correlationId:-}] %logger{36} - %msg%n"

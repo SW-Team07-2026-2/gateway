@@ -13,9 +13,9 @@ import reactor.core.publisher.Mono;
 import java.time.Duration;
 
 /**
- * /api/auth/me 의 프로필 5분 캐시 (§9-3) — 인증용 Redis auth:profile:{userId}.
+ * /api/auth/me 의 프로필 5분 캐시 (§9-3) — 캐시용 Redis auth:profile:{userId}.
  * Member 가 닉네임을 바꿔도 무효화할 방법이 없습니다 (Gateway 는 이벤트를 받지 않음) — 최대 5분 늦게 보입니다.
- * Redis 장애는 캐시 미스로 취급합니다.
+ * Redis 장애 · LRU 축출은 캐시 미스로 취급합니다 — 인증용(noeviction) 메모리를 블랙리스트에 남기려고 캐시용에 둡니다 (50A).
  */
 @Component
 public class ProfileCache {
@@ -23,13 +23,13 @@ public class ProfileCache {
     private static final Logger log = LoggerFactory.getLogger(ProfileCache.class);
     private static final Duration TTL = Duration.ofMinutes(5);
 
-    private final ReactiveStringRedisTemplate authRedis;
+    private final ReactiveStringRedisTemplate cacheRedis;
     private final MemberAuthClient memberAuthClient;
     private final ObjectMapper objectMapper;
 
-    public ProfileCache(@Qualifier("authRedis") ReactiveStringRedisTemplate authRedis,
+    public ProfileCache(@Qualifier("cacheRedis") ReactiveStringRedisTemplate cacheRedis,
                         MemberAuthClient memberAuthClient, ObjectMapper objectMapper) {
-        this.authRedis = authRedis;
+        this.cacheRedis = cacheRedis;
         this.memberAuthClient = memberAuthClient;
         this.objectMapper = objectMapper;
     }
@@ -39,7 +39,7 @@ public class ProfileCache {
         String key = "auth:profile:" + userId;
         Mono<ProfileResponse> fromMember = memberAuthClient.profile(userId)
                 .flatMap(profile -> put(key, profile).thenReturn(profile));
-        return authRedis.opsForValue().get(key)
+        return cacheRedis.opsForValue().get(key)
                 .map(this::read)
                 .onErrorResume(e -> {
                     log.warn("profile_cache_read_failed error={}", e.toString());
@@ -50,7 +50,7 @@ public class ProfileCache {
 
     private Mono<Boolean> put(String key, ProfileResponse profile) {
         try {
-            return authRedis.opsForValue().set(key, objectMapper.writeValueAsString(profile), TTL)
+            return cacheRedis.opsForValue().set(key, objectMapper.writeValueAsString(profile), TTL)
                     .onErrorResume(e -> Mono.just(false));
         } catch (Exception e) {
             return Mono.just(false);
