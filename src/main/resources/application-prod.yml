@@ -1,0 +1,13 @@
+spring:
+  data.redis:
+    host: ${REDIS_AUTH_HOST}          # 인증용 Redis (AZ-a)
+    port: 6379
+
+app:
+  domain: ${APP_DOMAIN}
+  cookie: { secure: true, same-site: Lax }    # 🔴 운영에서 secure 를 명시적으로 다시 선언
+  cors.origins: https://${app.domain}
+  redis:
+    cache: { host: "${REDIS_CACHE_HOST}", port: 6379 }   # 캐시용 (AZ-c) — rate limit · 프로필 캐시 (50A)
+
+logging.level.root: INFO

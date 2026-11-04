@@ -1,0 +1,39 @@
+spring:
+  # 로컬 시크릿은 .env 가 아니라 ./local-secrets/ 디렉터리에 파일로 둔다 (운영과 같은 방식)
+  config.import: optional:configtree:./local-secrets/
+  cloud:
+    kubernetes:
+      enabled: false
+      discovery.enabled: false              # ★ 로컬엔 k8s API 가 없다
+    discovery.client.simple.instances:      # lb://<서비스> 를 localhost 로 해석 (RouteConfig 는 그대로)
+      member:  [{ uri: "http://localhost:8081" }]
+      catalog: [{ uri: "http://localhost:8082" }]
+      concert: [{ uri: "http://localhost:8083" }]
+      payment: [{ uri: "http://localhost:8084" }]
+  data.redis:
+    host: localhost
+    port: 6379                              # 인증용
+
+app:
+  domain: localhost
+  # 🔴 로컬 전용 — localhost 는 Domain 속성을 붙이면 브라우저가 쿠키를 거부하므로 비워서 host-only 쿠키로 굽는다
+  cookie: { domain: "", secure: false, same-site: Lax }
+  cors.origins: http://localhost:5173       # Svelte dev server
+  member-base-url: http://localhost:8081
+  token:
+    jwks-uri: http://localhost:8081/.well-known/jwks.json
+    fallback-public-key-path: ./local-secrets/jwt-public.pem
+  oauth:
+    redirect-base: http://localhost:8080    # 카카오 콘솔에 별도 등록 필요 (§15)
+    success-redirect: http://localhost:5173/
+    signup-redirect: http://localhost:5173/signup
+    failure-redirect: http://localhost:5173/login
+  sanity:
+    allowed-hosts: [localhost, 127.0.0.1]
+  ingest:
+    hosts: [localhost, 127.0.0.1]           # 로컬 수집 스크립트 → http://localhost:8080/ingest/**
+  redis:
+    cache: { host: localhost, port: 6380 }  # 캐시용 — rate limit · 프로필 캐시 (50A)
+
+logging:
+  pattern.console: "%d{HH:mm:ss.SSS} %-5level [%X{correlationId:-}] %logger{36} - %msg%n"
