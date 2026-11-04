@@ -15,6 +15,7 @@ import org.springframework.core.io.buffer.DataBuffer;
 import org.springframework.core.io.buffer.DataBufferUtils;
 import org.springframework.core.io.buffer.DefaultDataBufferFactory;
 import org.springframework.data.redis.RedisConnectionFailureException;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.mock.env.MockEnvironment;
 import org.springframework.mock.http.server.reactive.MockServerHttpRequest;
@@ -169,9 +170,12 @@ class IngestFilterTest {
         assertThat(status(run(signed("/ingest/catalog/artists/1", BODY).body(BODY)))).isEqualTo(404);
     }
 
+    /** 클러스터 안(G1 통과)에서 메서드만 틀리면 404 가 아니라 405 — 수집기 버그를 바로 알 수 있게 */
     @Test
-    void nonPostIs404() throws Exception {
-        assertThat(status(run(MockServerHttpRequest.get(PATH).header("Host", "gateway").build()))).isEqualTo(404);
+    void nonPostIs405() throws Exception {
+        MockServerWebExchange exchange = run(MockServerHttpRequest.get(PATH).header("Host", "gateway").build());
+        assertThat(status(exchange)).isEqualTo(405);
+        assertThat(responseBody(exchange)).contains("METHOD_NOT_ALLOWED");
     }
 
     @Test
@@ -221,6 +225,24 @@ class IngestFilterTest {
     void missingSignatureHeadersIs401() throws Exception {
         assertThat(status(run(MockServerHttpRequest.post(PATH).header("Host", "gateway")
                 .contentType(MediaType.APPLICATION_JSON).body(BODY)))).isEqualTo(401);
+    }
+
+    /** 서명 헤더 4개는 빠진 · 틀린 헤더마다 코드가 다릅니다 (모두 401) */
+    @Test
+    void eachBrokenSignatureHeaderHasOwnCode() throws Exception {
+        Map<String, String> cases = Map.of(
+                IngestFilter.KEY_ID, "INGEST_KEY_ID_INVALID",
+                IngestFilter.TIMESTAMP, "INGEST_TIMESTAMP_INVALID",
+                IngestFilter.NONCE, "INGEST_NONCE_INVALID",
+                IngestFilter.SIGNATURE, "INGEST_SIGNATURE_MISSING");
+        for (var c : cases.entrySet()) {
+            HttpHeaders headers = new HttpHeaders();
+            headers.putAll(signed(PATH, BODY).build().getHeaders());
+            headers.remove(c.getKey());
+            MockServerWebExchange exchange = run(MockServerHttpRequest.post(PATH).headers(headers).body(BODY));
+            assertThat(status(exchange)).as(c.getKey()).isEqualTo(401);
+            assertThat(responseBody(exchange)).as(c.getKey()).contains(c.getValue());
+        }
     }
 
     @Test

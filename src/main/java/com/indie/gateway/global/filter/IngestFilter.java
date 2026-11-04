@@ -113,13 +113,19 @@ public class IngestFilter implements WebFilter, Ordered {
         String keyId = headers.getFirst(KEY_ID);
 
         // G1 — 외부에서 온 요청에는 이 경로가 있다는 것도 알려주지 않습니다
-        if (PROXY_HEADERS.stream().anyMatch(headers::containsKey) || !isClusterHost(headers)) {
-            return reject(exchange, "source", keyId, CommonErrorCode.NOT_FOUND);
+        if (PROXY_HEADERS.stream().anyMatch(headers::containsKey)) {
+            return reject(exchange, "source_proxy", keyId, CommonErrorCode.NOT_FOUND);
         }
-        // G2
+        if (!isClusterHost(headers)) {
+            return reject(exchange, "source_host", keyId, CommonErrorCode.NOT_FOUND);
+        }
+        // G2 — 여기부터는 클러스터 안 호출이라 경로 · 메서드를 구분해 알려줍니다
         IngestRoute route = IngestRoute.of(path).orElse(null);
-        if (route == null || !HttpMethod.POST.equals(request.getMethod())) {
+        if (route == null) {
             return reject(exchange, "route", keyId, CommonErrorCode.NOT_FOUND);
+        }
+        if (!HttpMethod.POST.equals(request.getMethod())) {
+            return reject(exchange, "method", keyId, CommonErrorCode.METHOD_NOT_ALLOWED);
         }
         if (!request.getQueryParams().isEmpty()) {   // 서명이 쿼리를 덮지 않으므로 받지 않습니다
             return reject(exchange, "query", keyId, CommonErrorCode.INVALID_REQUEST);
@@ -132,9 +138,17 @@ public class IngestFilter implements WebFilter, Ordered {
         String timestamp = headers.getFirst(TIMESTAMP);
         String nonce = headers.getFirst(NONCE);
         String signature = headers.getFirst(SIGNATURE);
-        if (!matches(KEY_ID_FORMAT, keyId) || !matches(TIMESTAMP_FORMAT, timestamp)
-                || !matches(NONCE_FORMAT, nonce) || signature == null) {
-            return reject(exchange, "signature_headers", keyId, IngestErrorCode.INGEST_SIGNATURE_INVALID);
+        if (!matches(KEY_ID_FORMAT, keyId)) {
+            return reject(exchange, "key_id_header", keyId, IngestErrorCode.INGEST_KEY_ID_INVALID);
+        }
+        if (!matches(TIMESTAMP_FORMAT, timestamp)) {
+            return reject(exchange, "timestamp_header", keyId, IngestErrorCode.INGEST_TIMESTAMP_INVALID);
+        }
+        if (!matches(NONCE_FORMAT, nonce)) {
+            return reject(exchange, "nonce_header", keyId, IngestErrorCode.INGEST_NONCE_INVALID);
+        }
+        if (signature == null) {
+            return reject(exchange, "signature_header", keyId, IngestErrorCode.INGEST_SIGNATURE_MISSING);
         }
 
         long started = System.nanoTime();
