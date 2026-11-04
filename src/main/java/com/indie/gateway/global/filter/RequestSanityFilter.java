@@ -101,8 +101,7 @@ public class RequestSanityFilter implements WebFilter, Ordered {
         }
 
         long contentLength = headers.getContentLength();
-        boolean upload = rawPath.startsWith(limits.uploadPathPrefix());
-        if (contentLength > (upload ? limits.maxUploadBytes() : limits.maxBodyBytes())) {
+        if (contentLength > limits.maxBodyBytes()) {
             return new Rejection("body_size", CommonErrorCode.PAYLOAD_TOO_LARGE);
         }
 

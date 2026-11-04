@@ -1,11 +1,6 @@
 package com.indie.gateway.global.config;
 
-import com.indie.gateway.domain.auth.entity.TokenClaims;
 import com.indie.gateway.domain.ingest.entity.IngestRoute;
-import com.indie.gateway.global.common.exception.CommonErrorCode;
-import com.indie.gateway.global.common.response.ErrorResponses;
-import com.indie.gateway.global.common.util.GatewayAttributes;
-import org.springframework.cloud.gateway.filter.GatewayFilter;
 import org.springframework.cloud.gateway.route.RouteLocator;
 import org.springframework.cloud.gateway.route.builder.GatewayFilterSpec;
 import org.springframework.cloud.gateway.route.builder.RouteLocatorBuilder;
@@ -49,23 +44,9 @@ public class RouteConfig {
                 .route("chatbot", r -> r.path("/api/chatbot", "/api/chatbot/**")
                         .filters(f -> f.circuitBreaker(c -> c.setName("chatbot").setFallbackUri("forward:/fallback/chatbot")))
                         .metadata(RESPONSE_TIMEOUT_ATTR, 30_000)
-                        .uri("lb://chatbot-service"))
-                // 관리자 AI (KT) — 🔴 재시도 0 · 타임아웃 60s · 호출 한도 분당 10 (RateLimitFilter)
-                // TODO(결정대기): 관리자 전용 로그인(typ=admin · docs/22) 구현 전이라 Studio 와 같이 ADMIN 역할만 봅니다
-                .route("admin-ai", r -> r.path("/api/admin-ai", "/api/admin-ai/**")
-                        .filters(f -> f.filter(adminOnly())
-                                .circuitBreaker(c -> c.setName("admin-ai").setFallbackUri("forward:/fallback/admin-ai")))
-                        .metadata(RESPONSE_TIMEOUT_ATTR, 60_000)
-                        .uri("lb://ai-service"))
-                // TODO(결정대기): §18-2 Studio 호출 경로 — 기본값 /api/studio/** · ADMIN 만
-                .route("studio", r -> r.path("/api/studio", "/api/studio/**")
-                        .filters(f -> f.filter(adminOnly())
-                                .circuitBreaker(c -> c.setName("studio").setFallbackUri("forward:/fallback/studio")))
-                        .uri("lb://studio"))
-                // TODO(결정대기): §18-1 무대 작업(GPU) 진입 경로 — 기본값 공개 라우트. Studio 가 GPU 전용 토큰을 검증해야 합니다
-                .route("stage-jobs", r -> r.path("/api/stage-jobs", "/api/stage-jobs/**")
-                        .filters(f -> f.circuitBreaker(c -> c.setName("studio").setFallbackUri("forward:/fallback/studio")))
-                        .uri("lb://studio"));
+                        .uri("lb://chatbot-service"));
+        // ✏️ 11/04 결정 56B · 57A — 관리자(Studio · 관리자 AI · GPU 무대 작업)는 KT 의 admin.<도메인> 으로 따로 들어갑니다.
+        //   /api/studio/** · /api/admin-ai/** · /api/stage-jobs/** 는 여기 없으니 404 입니다 (docs/20 §18-1 · §18-2)
         // 수집 (docs/22) — 서명 · 재전송 · 봉투 검사는 IngestFilter 가 끝낸 뒤입니다. 경로는 IngestRoute 고정 매핑만
         // 🔴 하위 서비스가 받은 뒤의 실패(5xx · 지연)는 재시도하지 않습니다 — 수집기가 새 서명으로 다시 보냅니다 (upsert 멱등 · S6)
         for (IngestRoute ingest : IngestRoute.values()) {
@@ -96,14 +77,5 @@ public class RouteConfig {
                 .setMethods(HttpMethod.GET)
                 .setSeries(HttpStatus.Series.SERVER_ERROR)
                 .setExceptions(IOException.class, TimeoutException.class));
-    }
-
-    private static GatewayFilter adminOnly() {
-        return (exchange, chain) -> {
-            TokenClaims claims = GatewayAttributes.claims(exchange);
-            return claims != null && claims.hasRole("ADMIN")
-                    ? chain.filter(exchange)
-                    : ErrorResponses.write(exchange, CommonErrorCode.FORBIDDEN);
-        };
     }
 }

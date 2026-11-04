@@ -89,9 +89,7 @@ app:
     signup-redirect: https://${app.domain}/signup       # 처음 로그인 → 밴드 고르기 (SIGNUP 쿠키)
     failure-redirect: https://${app.domain}/login
   sanity:                                               # ⓪ 필터 한계값 (§5-⓪)
-    max-body-bytes: 1048576                             # 1 MiB
-    max-upload-bytes: 10485760                          # 10 MiB — 무대 이미지 경로만
-    upload-path-prefix: /api/studio/
+    max-body-bytes: 1048576                             # 1 MiB — ✏️ 11/04 무대 이미지 업로드 예외(10 MiB · /api/studio/)는 관리자 진입과 같이 KT 로 (56B)
     max-query-params: 30
     max-query-key-length: 64
     max-header-bytes: 8192
@@ -124,8 +122,6 @@ resilience4j:
       concert:   { base-config: default }
       payment:   { base-config: default, failure-rate-threshold: 70 }   # 결제는 더 참는다
       chatbot:   { base-config: default, sliding-window-size: 10 }
-      admin-ai:  { base-config: default, sliding-window-size: 10 }
-      studio:    { base-config: default }
       ingest-catalog: { base-config: default }          # 수집 전용 — 큰 배치가 느려도 사용자 경로의 catalog CB 는 열리지 않게
       ingest-concert: { base-config: default }
       ingest-chatbot: { base-config: default }
@@ -133,7 +129,6 @@ resilience4j:
     configs.default.timeout-duration: 5s
     instances:
       chatbot:   { timeout-duration: 30s }
-      admin-ai:  { timeout-duration: 60s }
       ingest-catalog: { timeout-duration: 35s }         # 응답 타임아웃(30s)이 먼저 끊어 504 로 구분되게
       ingest-concert: { timeout-duration: 35s }
       ingest-chatbot: { timeout-duration: 35s }

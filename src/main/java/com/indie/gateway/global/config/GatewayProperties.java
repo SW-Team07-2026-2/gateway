@@ -27,7 +27,7 @@ public record GatewayProperties(
 
     public record OAuth(String redirectBase, String successRedirect, String signupRedirect, String failureRedirect) {}
 
-    public record Sanity(long maxBodyBytes, long maxUploadBytes, String uploadPathPrefix, int maxQueryParams,
+    public record Sanity(long maxBodyBytes, int maxQueryParams,
                          int maxQueryKeyLength, int maxHeaderBytes, int maxPathSegments, List<String> allowedHosts) {}
 
     public record Trust(int proxyDepth) {}

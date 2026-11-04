@@ -48,7 +48,6 @@ public class RateLimitFilter implements WebFilter, Ordered {
     private static String bucket(ServerHttpRequest request) {
         String path = request.getPath().value();
         if (path.equals("/api/chatbot") || path.startsWith("/api/chatbot/")) return RateLimiterConfig.CHATBOT;
-        if (path.equals("/api/admin-ai") || path.startsWith("/api/admin-ai/")) return RateLimiterConfig.ADMIN_AI;
         if (HttpMethod.POST.equals(request.getMethod()) && path.equals("/api/auth/refresh")) return RateLimiterConfig.AUTH_REFRESH;
         if (path.startsWith("/oauth2/authorization/")) return RateLimiterConfig.OAUTH2_AUTHORIZE;
         return null;

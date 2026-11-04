@@ -7,10 +7,13 @@ import java.util.List;
 /** 경로 분류 — 공개 경로 · CSRF 면제 · 인증이 걸리는 경로를 한 곳에서 정의합니다 */
 public final class PathRules {
 
-    /** 인증을 따지는 경로. 여기에 없는 경로는 토큰 검사 없이 라우팅 단계에서 404 가 됩니다 (/internal/** 등) */
+    /**
+     * 인증을 따지는 경로. 여기에 없는 경로는 토큰 검사 없이 라우팅 단계에서 404 가 됩니다 (/internal/** 등)
+     * ✏️ 11/04 56B · 57A — 관리자 경로(/api/studio · /api/admin-ai · /api/stage-jobs)는 KT 로 빠져 여기 없습니다
+     */
     private static final List<String> KNOWN_PREFIXES = List.of(
             "/api/members", "/api/catalog", "/api/concerts", "/api/payments",
-            "/api/chatbot", "/api/admin-ai", "/api/studio", "/api/stage-jobs", "/api/auth");
+            "/api/chatbot", "/api/auth");
 
     public static boolean isKnown(String path) {
         return KNOWN_PREFIXES.stream().anyMatch(p -> path.equals(p) || path.startsWith(p + "/"));
@@ -26,8 +29,6 @@ public final class PathRules {
             }
         }
         if (HttpMethod.POST.equals(method) && path.startsWith("/api/payments/webhook/")) return true;
-        // TODO(결정대기): §18-1 무대 작업(GPU) 진입 경로 — 기본값대로 공개 라우트. Studio 가 GPU 전용 토큰을 검증해야 합니다
-        if (under(path, "/api/stage-jobs")) return true;
         // 만료된 AT 로도 호출돼야 하는 Gateway 자체 엔드포인트 (선제 갱신 실패 시 폴백 · 로그아웃) · AT 가 아직 없는 가입 완료 (SIGNUP 쿠키)
         if (HttpMethod.POST.equals(method) && (path.equals("/api/auth/refresh") || path.equals("/api/auth/logout")
                 || path.equals("/api/auth/signup"))) {
