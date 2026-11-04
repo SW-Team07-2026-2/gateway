@@ -128,7 +128,7 @@ public class AuthController {
     /**
      * 가입 완료 — 밴드 고르기의 「완료」 · 「건너뛰기」. SIGNUP 쿠키(사인업 토큰) + CSRF 헤더 · { artistIds }.
      * Member 가 회원 · 팔로우 · 동의 이력을 만들면 AT · RT 를 굽고 SIGNUP 은 지웁니다.
-     * 토큰이 없거나 만료 · 이미 사용이면 401 SIGNUP_EXPIRED (프론트는 로그인 화면으로).
+     * 토큰이 없거나 만료 · 이미 사용이면 401 SIGNUP_EXPIRED, 위조 · 형식 오류면 401 SIGNUP_INVALID (프론트는 둘 다 로그인 화면으로).
      */
     @PostMapping("/signup")
     public Mono<Void> signup(@RequestBody(required = false) SignupBody body, ServerWebExchange exchange) {
@@ -154,7 +154,8 @@ public class AuthController {
                     }
                     if (e.status() == 401) {
                         exchange.getResponse().addCookie(cookieFactory.expireSignup());
-                        return ErrorResponses.write(exchange, AuthErrorCode.SIGNUP_EXPIRED);
+                        return ErrorResponses.write(exchange, "SIGNUP_INVALID".equals(e.code())
+                                ? AuthErrorCode.SIGNUP_INVALID : AuthErrorCode.SIGNUP_EXPIRED);
                     }
                     return ErrorResponses.write(exchange, CommonErrorCode.INVALID_REQUEST);   // artistIds 50개 초과 등
                 })

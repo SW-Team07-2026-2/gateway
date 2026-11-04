@@ -31,6 +31,18 @@ class CsrfFilterTest {
     }
 
     @Test
+    void missingCookieHeaderAndMismatchHaveOwnCodes() {
+        MockServerWebExchange[] ex = new MockServerWebExchange[1];
+        passes(MockServerHttpRequest.post("/api/members/follows/1").header(CsrfFilter.HEADER, "abc").build(), ex);
+        assertThat(ex[0].getResponse().getBodyAsString().block()).contains("CSRF_COOKIE_MISSING");
+        passes(MockServerHttpRequest.post("/api/members/follows/1").cookie(cookie("abc")).build(), ex);
+        assertThat(ex[0].getResponse().getBodyAsString().block()).contains("CSRF_HEADER_MISSING");
+        passes(MockServerHttpRequest.post("/api/members/follows/1").cookie(cookie("abc")).header(CsrfFilter.HEADER, "abd").build(), ex);
+        assertThat(ex[0].getResponse().getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        assertThat(ex[0].getResponse().getBodyAsString().block()).contains("CSRF_MISMATCH");
+    }
+
+    @Test
     void matchingCookieAndHeaderPass() {
         MockServerWebExchange[] ex = new MockServerWebExchange[1];
         assertThat(passes(MockServerHttpRequest.post("/api/members/follows/1").cookie(cookie("abc"))
