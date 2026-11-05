@@ -13,6 +13,8 @@ public enum AuthErrorCode implements BaseErrorCode {
     REFRESH_REUSED(HttpStatus.UNAUTHORIZED, "다시 로그인해주세요"),
     SIGNUP_EXPIRED(HttpStatus.UNAUTHORIZED, "가입 시간이 지났어요. 다시 로그인해주세요"),
     SIGNUP_INVALID(HttpStatus.UNAUTHORIZED, "가입 정보를 확인할 수 없어요. 다시 로그인해주세요"),   // 위조 · 형식이 틀린 사인업 토큰 (Member 가 판정)
+    REQUIRED_AGREEMENT_MISSING(HttpStatus.BAD_REQUEST, "필수 약관에 동의해주세요"),             // 11/05 G13 — Member 가 판정 · 사인업 토큰은 살아 있음
+    TERMS_OUTDATED(HttpStatus.CONFLICT, "약관이 바뀌었어요. 다시 확인하고 동의해주세요"),          // 11/05 G13 — 현재 약관이 아닌 termsId
     CSRF_COOKIE_MISSING(HttpStatus.FORBIDDEN, "요청을 확인할 수 없습니다. 새로고침 후 다시 시도해주세요"),   // XSRF-TOKEN 쿠키 없음 (만료 · 삭제)
     CSRF_HEADER_MISSING(HttpStatus.FORBIDDEN, "요청을 확인할 수 없습니다"),                                 // 프론트가 X-XSRF-TOKEN 을 안 붙임
     CSRF_MISMATCH(HttpStatus.FORBIDDEN, "요청을 확인할 수 없습니다");

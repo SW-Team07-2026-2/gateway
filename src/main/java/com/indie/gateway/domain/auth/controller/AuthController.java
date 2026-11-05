@@ -126,9 +126,10 @@ public class AuthController {
     }
 
     /**
-     * 가입 완료 — 밴드 고르기의 「완료」 · 「건너뛰기」. SIGNUP 쿠키(사인업 토큰) + CSRF 헤더 · { artistIds }.
+     * 가입 완료 — 약관 동의 → 밴드 고르기의 「완료」 · 「건너뛰기」. SIGNUP 쿠키(사인업 토큰) + CSRF 헤더 · { artistIds, agreements }.
      * Member 가 회원 · 팔로우 · 동의 이력을 만들면 AT · RT 를 굽고 SIGNUP 은 지웁니다.
      * 토큰이 없거나 만료 · 이미 사용이면 401 SIGNUP_EXPIRED, 위조 · 형식 오류면 401 SIGNUP_INVALID (프론트는 둘 다 로그인 화면으로).
+     * 약관 400 REQUIRED_AGREEMENT_MISSING · 409 TERMS_OUTDATED 는 Member 코드 그대로 — SIGNUP 은 지우지 않습니다 (다시 보낼 수 있음).
      */
     @PostMapping("/signup")
     public Mono<Void> signup(@RequestBody(required = false) SignupBody body, ServerWebExchange exchange) {
@@ -137,7 +138,8 @@ public class AuthController {
             return ErrorResponses.write(exchange, AuthErrorCode.SIGNUP_EXPIRED);
         }
         List<Long> artistIds = body == null || body.artistIds() == null ? List.of() : body.artistIds();
-        return memberAuthClient.signup(new SignupRequest(signup.getValue(), artistIds))
+        List<SignupRequest.Agreement> agreements = body == null || body.agreements() == null ? List.of() : body.agreements();
+        return memberAuthClient.signup(new SignupRequest(signup.getValue(), artistIds, agreements))
                 .flatMap(issued -> {
                     exchange.getResponse().addCookie(cookieFactory.at(issued.accessToken()));
                     exchange.getResponse().addCookie(cookieFactory.rt(issued.refreshToken()));
@@ -157,6 +159,12 @@ public class AuthController {
                         return ErrorResponses.write(exchange, "SIGNUP_INVALID".equals(e.code())
                                 ? AuthErrorCode.SIGNUP_INVALID : AuthErrorCode.SIGNUP_EXPIRED);
                     }
+                    if ("REQUIRED_AGREEMENT_MISSING".equals(e.code())) {
+                        return ErrorResponses.write(exchange, AuthErrorCode.REQUIRED_AGREEMENT_MISSING);
+                    }
+                    if ("TERMS_OUTDATED".equals(e.code())) {
+                        return ErrorResponses.write(exchange, AuthErrorCode.TERMS_OUTDATED);
+                    }
                     return ErrorResponses.write(exchange, CommonErrorCode.INVALID_REQUEST);   // artistIds 50개 초과 등
                 })
                 .onErrorResume(e -> {
@@ -165,8 +173,8 @@ public class AuthController {
                 });
     }
 
-    /** 밴드 고르기에서 고른 아티스트 — 건너뛰면 빈 배열 · 본문 없음 */
-    public record SignupBody(List<Long> artistIds) {}
+    /** 밴드 고르기에서 고른 아티스트(건너뛰면 빈 배열) + 11/05 약관 동의 (M24 의 약관 · 검사는 Member) */
+    public record SignupBody(List<Long> artistIds, List<SignupRequest.Agreement> agreements) {}
 
     private String ensureXsrfToken(ServerWebExchange exchange) {
         HttpCookie existing = exchange.getRequest().getCookies().getFirst(CookieFactory.XSRF);
