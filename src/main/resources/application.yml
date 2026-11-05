@@ -129,6 +129,7 @@ resilience4j:
     configs.default.timeout-duration: 5s
     instances:
       chatbot:   { timeout-duration: 30s }
+      concert:   { timeout-duration: 11s }                # 75-5 — 예매 경로 응답 타임아웃(10s)이 먼저 끊게. 다른 concert 경로는 5s 응답 타임아웃이 먼저 끊음
       ingest-catalog: { timeout-duration: 35s }         # 응답 타임아웃(30s)이 먼저 끊어 504 로 구분되게
       ingest-concert: { timeout-duration: 35s }
       ingest-chatbot: { timeout-duration: 35s }
