@@ -106,7 +106,7 @@ public class SecurityConfig {
     }
 
     /**
-     * IdP access_token 은 이 요청 안에서만 둡니다 — 성공 핸들러가 카카오 약관 동의 내역을 조회하고 나면 요청과 함께 사라집니다.
+     * IdP access_token 은 이 요청 안에서만 둡니다 — 콜백 요청이 끝나면 함께 사라집니다 (11/05 카카오 약관 조회는 폐기 · 쓰는 곳 없음).
      * 기본 구현은 Pod 메모리에 쌓입니다. Spring Security 는 성공 핸들러보다 먼저 save 를 부릅니다
      */
     private static class RequestScopedAuthorizedClientRepository implements ServerOAuth2AuthorizedClientRepository {

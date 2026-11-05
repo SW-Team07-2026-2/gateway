@@ -34,9 +34,13 @@ public class CsrfFilter implements WebFilter, Ordered {
         }
         HttpCookie cookie = request.getCookies().getFirst(CookieFactory.XSRF);
         String header = request.getHeaders().getFirst(HEADER);
-        if (cookie == null || header == null || cookie.getValue().isEmpty()
-                || !MessageDigest.isEqual(cookie.getValue().getBytes(StandardCharsets.UTF_8),
-                                          header.getBytes(StandardCharsets.UTF_8))) {
+        if (cookie == null || cookie.getValue().isEmpty()) {
+            return ErrorResponses.write(exchange, AuthErrorCode.CSRF_COOKIE_MISSING);
+        }
+        if (header == null) {
+            return ErrorResponses.write(exchange, AuthErrorCode.CSRF_HEADER_MISSING);
+        }
+        if (!MessageDigest.isEqual(cookie.getValue().getBytes(StandardCharsets.UTF_8), header.getBytes(StandardCharsets.UTF_8))) {
             return ErrorResponses.write(exchange, AuthErrorCode.CSRF_MISMATCH);
         }
         return chain.filter(exchange);

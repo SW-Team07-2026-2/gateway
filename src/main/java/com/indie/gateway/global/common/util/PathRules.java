@@ -24,7 +24,8 @@ public final class PathRules {
         if (HttpMethod.GET.equals(method) || HttpMethod.HEAD.equals(method)) {
             if (under(path, "/api/catalog") || under(path, "/api/concerts")
                     || under(path, "/actuator/health") || under(path, "/fallback")
-                    || path.equals("/api/chatbot/artists/similar")) {   // 가입 밴드 고르기 — 아직 회원이 아님 (X4)
+                    || path.equals("/api/chatbot/artists/similar")     // 가입 밴드 고르기 — 아직 회원이 아님 (X4)
+                    || path.equals("/api/members/terms")) {            // 11/05 가입 약관 동의 · 푸터 약관 화면 (M24)
                 return true;
             }
         }

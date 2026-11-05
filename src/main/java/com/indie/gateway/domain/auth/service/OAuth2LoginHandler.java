@@ -1,16 +1,13 @@
 package com.indie.gateway.domain.auth.service;
 
-import com.indie.gateway.domain.auth.client.KakaoServiceTermsClient;
 import com.indie.gateway.domain.auth.client.MemberAuthClient;
 import com.indie.gateway.domain.auth.dto.request.IssueRequest;
-import com.indie.gateway.domain.auth.dto.request.IssueRequest.Agreement;
 import com.indie.gateway.global.config.GatewayProperties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.AuthenticationException;
-import org.springframework.security.oauth2.client.OAuth2AuthorizedClient;
 import org.springframework.security.oauth2.client.authentication.OAuth2AuthenticationToken;
 import org.springframework.security.web.server.WebFilterExchange;
 import org.springframework.security.web.server.authentication.ServerAuthenticationFailureHandler;
@@ -20,14 +17,13 @@ import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 
 import java.net.URI;
-import java.util.List;
 import java.util.Map;
 
 /**
  * OAuth 콜백 GET /oauth2/code/{provider} 의 후반부 (§7-2).
  * code 교환 · state 검증 · IdP 프로필 조회는 Spring Security 가 끝낸 상태로 들어옵니다.
  * <pre>
- * ③ 카카오 약관 동의 내역 (카카오 싱크) → Member POST /internal/auth/issue
+ * ③ Member POST /internal/auth/issue (11/05 카카오 싱크 폐기 — 약관은 가입 화면에서 받아 POST /api/auth/signup 으로)
  * ④ 기존 회원 → AT · RT · XSRF-TOKEN Set-Cookie → ⑤ 302 프론트 홈
  *    처음      → SIGNUP(사인업 토큰) · XSRF-TOKEN Set-Cookie → ⑤ 302 프론트 가입(밴드 고르기) — 회원은 POST /api/auth/signup 에서 생김
  * </pre>
@@ -37,20 +33,17 @@ import java.util.Map;
 @Component
 public class OAuth2LoginHandler implements ServerAuthenticationSuccessHandler, ServerAuthenticationFailureHandler {
 
-    /** 콜백 요청 안에서만 IdP access_token 을 넘겨받는 exchange 속성 (SecurityConfig 가 넣음) */
+    /** 콜백 요청 안에서만 IdP access_token 을 두는 exchange 속성 (SecurityConfig 가 넣음 — Pod 메모리에 쌓이지 않게) */
     public static final String AUTHORIZED_CLIENT = OAuth2LoginHandler.class.getName() + ".authorizedClient";
 
     private static final Logger log = LoggerFactory.getLogger(OAuth2LoginHandler.class);
 
     private final MemberAuthClient memberAuthClient;
-    private final KakaoServiceTermsClient kakaoServiceTerms;
     private final CookieFactory cookieFactory;
     private final GatewayProperties.OAuth props;
 
-    public OAuth2LoginHandler(MemberAuthClient memberAuthClient, KakaoServiceTermsClient kakaoServiceTerms,
-                              CookieFactory cookieFactory, GatewayProperties props) {
+    public OAuth2LoginHandler(MemberAuthClient memberAuthClient, CookieFactory cookieFactory, GatewayProperties props) {
         this.memberAuthClient = memberAuthClient;
-        this.kakaoServiceTerms = kakaoServiceTerms;
         this.cookieFactory = cookieFactory;
         this.props = props.oauth();
     }
@@ -60,11 +53,7 @@ public class OAuth2LoginHandler implements ServerAuthenticationSuccessHandler, S
         ServerWebExchange exchange = webFilterExchange.getExchange();
         OAuth2AuthenticationToken token = (OAuth2AuthenticationToken) authentication;
         String provider = token.getAuthorizedClientRegistrationId();
-        OAuth2AuthorizedClient client = exchange.getAttribute(AUTHORIZED_CLIENT);
-        Mono<List<Agreement>> agreements = client == null ? Mono.just(List.of())
-                : kakaoServiceTerms.agreed(client.getAccessToken().getTokenValue());
-        return agreements
-                .map(a -> toIssueRequest(provider, token.getPrincipal().getAttributes(), a))
+        return Mono.fromCallable(() -> toIssueRequest(provider, token.getPrincipal().getAttributes()))
                 .flatMap(memberAuthClient::issue)
                 .flatMap(issued -> {
                     exchange.getResponse().addCookie(cookieFactory.xsrf(CookieFactory.newXsrfToken()));
@@ -93,12 +82,12 @@ public class OAuth2LoginHandler implements ServerAuthenticationSuccessHandler, S
 
     /** 카카오 프로필 → Member 요청. 이메일 미동의면 email 은 null (Member 는 provider+providerUid 로 식별) · 10/28 로그인은 카카오만 */
     @SuppressWarnings("unchecked")
-    static IssueRequest toIssueRequest(String registrationId, Map<String, Object> attrs, List<Agreement> agreements) {
+    static IssueRequest toIssueRequest(String registrationId, Map<String, Object> attrs) {
         if ("kakao".equals(registrationId)) {
             Map<String, Object> account = (Map<String, Object>) attrs.getOrDefault("kakao_account", Map.of());
             Map<String, Object> profile = (Map<String, Object>) account.getOrDefault("profile", Map.of());
             return new IssueRequest("KAKAO", String.valueOf(attrs.get("id")), (String) account.get("email"),
-                    (String) profile.get("nickname"), (String) profile.get("profile_image_url"), agreements);
+                    (String) profile.get("nickname"), (String) profile.get("profile_image_url"));
         }
         throw new IllegalArgumentException("unsupported provider: " + registrationId);
     }

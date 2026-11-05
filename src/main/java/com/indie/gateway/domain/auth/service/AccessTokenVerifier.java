@@ -7,6 +7,8 @@ import com.nimbusds.jose.JWSAlgorithm;
 import com.nimbusds.jose.crypto.RSASSAVerifier;
 import com.nimbusds.jwt.JWTClaimsSet;
 import com.nimbusds.jwt.SignedJWT;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
 
@@ -23,6 +25,8 @@ import java.util.List;
  */
 @Component
 public class AccessTokenVerifier {
+
+    private static final Logger log = LoggerFactory.getLogger(AccessTokenVerifier.class);
 
     private final JwksKeyStore keyStore;
     private final String issuer;
@@ -68,16 +72,31 @@ public class AccessTokenVerifier {
         }
         JWTClaimsSet claims = jwt.getJWTClaimsSet();
         Date now = Date.from(clock.instant());
-        if (!issuer.equals(claims.getIssuer()) || claims.getSubject() == null || claims.getJWTID() == null) {
-            throw TokenException.invalid();
+        // 서명은 맞는데 클레임이 틀린 토큰 — 발급 쪽 설정 오류 신호라 사유를 남깁니다 (응답 코드는 하나로)
+        if (!issuer.equals(claims.getIssuer())) {
+            throw rejected("issuer");
+        }
+        if (claims.getSubject() == null) {
+            throw rejected("subject");
+        }
+        if (claims.getJWTID() == null) {
+            throw rejected("jti");
         }
         if (claims.getNotBeforeTime() != null && now.before(claims.getNotBeforeTime())) {
             throw TokenException.invalid();
         }
-        if (claims.getExpirationTime() == null || !now.before(claims.getExpirationTime())) {
+        if (claims.getExpirationTime() == null) {
+            throw rejected("exp");                     // 만료 시각이 없는 토큰은 만료가 아니라 잘못된 토큰
+        }
+        if (!now.before(claims.getExpirationTime())) {
             throw TokenException.expired();
         }
         return toClaims(claims);
+    }
+
+    private static TokenException rejected(String reason) {
+        log.warn("access_token_rejected reason={}", reason);
+        return TokenException.invalid();
     }
 
     private static TokenClaims toClaims(JWTClaimsSet claims) throws ParseException {

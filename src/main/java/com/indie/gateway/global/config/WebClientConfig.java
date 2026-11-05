@@ -25,18 +25,6 @@ public class WebClientConfig {
                 .build();
     }
 
-    /** 카카오 API (로그인 콜백의 약관 동의 내역 조회) — connect 1s · read 2s · 재시도 없음 */
-    @Bean
-    public WebClient kakaoWebClient(WebClient.Builder builder) {
-        HttpClient httpClient = HttpClient.create()
-                .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, 1000)
-                .responseTimeout(Duration.ofSeconds(2));
-        return builder.clone()
-                .baseUrl("https://kapi.kakao.com")
-                .clientConnector(new ReactorClientHttpConnector(httpClient))
-                .build();
-    }
-
     @Bean
     public Clock clock() {
         return Clock.systemUTC();

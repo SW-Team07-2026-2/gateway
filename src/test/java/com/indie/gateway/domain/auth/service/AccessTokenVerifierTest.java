@@ -58,6 +58,22 @@ class AccessTokenVerifierTest {
                 .isInstanceOfSatisfying(AccessTokenVerifier.TokenException.class, e -> assertThat(e.code()).isEqualTo("TOKEN_EXPIRED"));
     }
 
+    /** 만료 시각이 없는 토큰은 만료(재발급 유도)가 아니라 잘못된 토큰 */
+    @Test
+    void tokenWithoutExpIsInvalidNotExpired() throws Exception {
+        JWTClaimsSet noExp = new JWTClaimsSet.Builder().issuer("indie-member").subject("1").jwtID("j1").build();
+        assertThatThrownBy(() -> verifier.verify(sign(noExp)).block())
+                .isInstanceOfSatisfying(AccessTokenVerifier.TokenException.class, e -> assertThat(e.code()).isEqualTo("TOKEN_INVALID"));
+    }
+
+    @Test
+    void tokenFromOtherIssuerIsInvalid() throws Exception {
+        JWTClaimsSet other = new JWTClaimsSet.Builder().issuer("someone-else").subject("1").jwtID("j1")
+                .expirationTime(Date.from(Instant.now().plusSeconds(600))).build();
+        assertThatThrownBy(() -> verifier.verify(sign(other)).block())
+                .isInstanceOfSatisfying(AccessTokenVerifier.TokenException.class, e -> assertThat(e.code()).isEqualTo("TOKEN_INVALID"));
+    }
+
     /** DoD 4 */
     @Test
     void algNoneIsRejected() {
@@ -86,7 +102,11 @@ class AccessTokenVerifierTest {
     }
 
     private static String rs256(Instant exp) throws Exception {
-        SignedJWT jwt = new SignedJWT(new JWSHeader.Builder(JWSAlgorithm.RS256).keyID("k1").build(), claims(exp));
+        return sign(claims(exp));
+    }
+
+    private static String sign(JWTClaimsSet claims) throws Exception {
+        SignedJWT jwt = new SignedJWT(new JWSHeader.Builder(JWSAlgorithm.RS256).keyID("k1").build(), claims);
         jwt.sign(new RSASSASigner(key));
         return jwt.serialize();
     }

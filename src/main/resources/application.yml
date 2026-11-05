@@ -38,7 +38,7 @@ spring:
         redirect-uri: "${app.oauth.redirect-base}/oauth2/code/kakao"   # ★ 절대경로 · /oauth2/* 아래 (SecurityConfig 콜백 매처와 같게)
         authorization-grant-type: authorization_code
         client-authentication-method: client_secret_post  # ★ 카카오는 POST
-        scope: [profile_nickname, account_email]   # 약관 동의는 카카오 싱크 — 동의 화면에 약관이 함께 뜹니다 (콘솔 › 간편가입) · 10/28 Google 로그인 없음
+        scope: [profile_nickname, account_email]   # 11/05 정규 앱 · 카카오 싱크 폐기 — 약관은 가입 화면 (M24 · G13) · 10/28 Google 로그인 없음
     provider:
       kakao:
         authorization-uri: https://kauth.kakao.com/oauth/authorize
@@ -129,6 +129,7 @@ resilience4j:
     configs.default.timeout-duration: 5s
     instances:
       chatbot:   { timeout-duration: 30s }
+      concert:   { timeout-duration: 11s }                # 75-5 — 예매 경로 응답 타임아웃(10s)이 먼저 끊게. 다른 concert 경로는 5s 응답 타임아웃이 먼저 끊음
       ingest-catalog: { timeout-duration: 35s }         # 응답 타임아웃(30s)이 먼저 끊어 504 로 구분되게
       ingest-concert: { timeout-duration: 35s }
       ingest-chatbot: { timeout-duration: 35s }

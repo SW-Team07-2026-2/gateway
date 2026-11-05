@@ -11,13 +11,12 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 
-import java.util.List;
 import java.util.Map;
 
 /**
  * 🔴 local 프로파일 전용 — 카카오 키 없이 로그인 흐름을 재현합니다.
  * OAuth 콜백의 ③~④ 를 그대로 탑니다 — 기존 회원이면 AT · RT · XSRF, 처음이면 SIGNUP · XSRF (이어서 POST /api/auth/signup).
- * IdP 단계와 카카오 약관 동의 내역 조회만 건너뜁니다.
+ * IdP 단계만 건너뜁니다.
  * 운영 프로파일에는 빈이 없으므로 /dev/login 은 404 입니다.
  */
 @RestController
@@ -34,7 +33,7 @@ public class DevLoginController {
 
     @GetMapping("/dev/login")
     public Mono<ApiResponse<Map<String, Object>>> login(@RequestParam(defaultValue = "로컬유저") String nickname, ServerWebExchange exchange) {
-        IssueRequest request = new IssueRequest("KAKAO", "local-dev-" + nickname, null, nickname, null, List.of());
+        IssueRequest request = new IssueRequest("KAKAO", "local-dev-" + nickname, null, nickname, null);
         return memberAuthClient.issue(request).map(issued -> {
             String xsrf = CookieFactory.newXsrfToken();
             exchange.getResponse().addCookie(cookieFactory.xsrf(xsrf));

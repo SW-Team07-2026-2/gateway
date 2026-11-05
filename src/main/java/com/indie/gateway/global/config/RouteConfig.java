@@ -33,6 +33,12 @@ public class RouteConfig {
                 .route("catalog", r -> r.path("/api/catalog", "/api/catalog/**")
                         .filters(f -> retryGet(f).circuitBreaker(c -> c.setName("catalog").setFallbackUri("forward:/fallback/catalog")))
                         .uri("lb://catalog"))
+                // ✏️ 11/04 75-5 — 좌석 선점(N10) · 결제 승인(N16)은 Concert 가 Payment 를 두 번 부를 수 있어 최악 8초 (docs/30 R8).
+                //   이 두 경로만 응답 타임아웃 10초 · POST 라 재시도 없음. 나머지 /api/concerts/** 는 기본 5초 그대로 (GET 재시도 2회 × 5초)
+                .route("concert-booking", r -> r.path("/api/concerts/*/bookings", "/api/concerts/bookings/*/confirm").and().method(HttpMethod.POST)
+                        .filters(f -> f.circuitBreaker(c -> c.setName("concert").setFallbackUri("forward:/fallback/concert")))
+                        .metadata(RESPONSE_TIMEOUT_ATTR, 10_000)
+                        .uri("lb://concert"))
                 .route("concert", r -> r.path("/api/concerts", "/api/concerts/**")
                         .filters(f -> retryGet(f).circuitBreaker(c -> c.setName("concert").setFallbackUri("forward:/fallback/concert")))
                         .uri("lb://concert"))
