@@ -38,6 +38,8 @@ class SignupFlowTest {
         assertThat(PathRules.isPublic(HttpMethod.GET, "/api/chatbot/artists/similar")).isTrue();
         assertThat(PathRules.isPublic(HttpMethod.POST, "/api/chatbot")).isFalse();
         assertThat(PathRules.isPublic(HttpMethod.GET, "/api/members/terms")).isTrue();
+        assertThat(PathRules.isPublic(HttpMethod.GET, "/api/members/terms/PRIVACY_POLICY")).isTrue();   // 11/06 M25 푸터
+        assertThat(PathRules.isPublic(HttpMethod.GET, "/api/members/termsX")).isFalse();
         assertThat(PathRules.isPublic(HttpMethod.GET, "/api/members/me/agreements")).isFalse();   // MY 는 로그인
         assertThat(PathRules.isPublic(HttpMethod.POST, "/api/members/terms")).isFalse();
         assertThat(PathRules.isCsrfExempt("/api/auth/signup")).isFalse();   // 🔴 CSRF 는 그대로
