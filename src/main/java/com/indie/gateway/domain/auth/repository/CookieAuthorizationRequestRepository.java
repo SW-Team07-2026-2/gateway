@@ -22,6 +22,8 @@ import java.util.Map;
 @Component
 public class CookieAuthorizationRequestRepository implements ServerAuthorizationRequestRepository<OAuth2AuthorizationRequest> {
 
+    public static final String LOCAL_FRONTEND = CookieAuthorizationRequestRepository.class.getName() + ".localFrontend";
+
     private final CookieFactory cookieFactory;
     private final ObjectMapper objectMapper;
 
@@ -45,13 +47,25 @@ public class CookieAuthorizationRequestRepository implements ServerAuthorization
             exchange.getResponse().addCookie(cookieFactory.expire(CookieFactory.OAUTH_REQUEST));
             return Mono.empty();
         }
-        return Mono.fromRunnable(() -> exchange.getResponse().addCookie(cookieFactory.oauthRequest(encode(request))));
+        return Mono.fromRunnable(() -> {
+            // 로그인 시작 때 선택한 프론트를 OAuth 요청과 함께 보관합니다. 카카오 콜백 URI 는 그대로입니다.
+            OAuth2AuthorizationRequest stored = OAuth2AuthorizationRequest.from(request)
+                    .attributes(attrs -> attrs.put(LOCAL_FRONTEND,
+                            "local".equals(exchange.getRequest().getQueryParams().getFirst("frontend"))))
+                    .build();
+            exchange.getResponse().addCookie(cookieFactory.oauthRequest(encode(stored)));
+        });
     }
 
     @Override
     public Mono<OAuth2AuthorizationRequest> removeAuthorizationRequest(ServerWebExchange exchange) {
         return loadAuthorizationRequest(exchange)
-                .doOnNext(r -> exchange.getResponse().addCookie(cookieFactory.expire(CookieFactory.OAUTH_REQUEST)));
+                .doOnNext(r -> {
+                    exchange.getResponse().addCookie(cookieFactory.expire(CookieFactory.OAUTH_REQUEST));
+                    // 콜백의 쿼리로 목적지를 바꾸지 않습니다. 같은 state 의 저장된 선택만 사용합니다.
+                    exchange.getAttributes().put(LOCAL_FRONTEND, Boolean.TRUE.equals(r.getAttribute(LOCAL_FRONTEND))
+                            && r.getState() != null && r.getState().equals(exchange.getRequest().getQueryParams().getFirst("state")));
+                });
     }
 
     private String encode(OAuth2AuthorizationRequest r) {
