@@ -17,6 +17,10 @@ window.location.href = 'https://api.indig.co.kr/oauth2/authorization/kakao?front
 
 카카오에 등록된 콜백은 **`https://api.indig.co.kr/oauth2/code/kakao` 그대로**입니다. 프론트는 `/`, `/signup`, `/login` 화면을 준비합니다. 카카오 인증 후 신규 사용자는 아직 가입 전이므로 `/signup` 화면을 표시하고, 가입 완료 전 `/api/auth/me` 의 401 을 로그인 재시작으로 처리하지 않습니다.
 
-운영 CORS 는 `https://indig.co.kr` 및 `http://localhost:5173` 을 허용합니다. 로컬 연동 중에는 모든 쿠키가 `.indig.co.kr` 의 `SameSite=None; Secure` 로 발급됩니다. 브라우저의 서드파티 쿠키 차단 여부에 따라 인증이 막힐 수 있습니다. 또한 localhost JavaScript 는 `.indig.co.kr` 의 XSRF 쿠키를 읽을 수 없으므로 가입을 포함한 상태 변경 요청의 CSRF 토큰 전달은 별도로 처리해야 합니다. 연동 완료 후 SameSite 정책을 되돌려야 합니다.
+운영 CORS 는 `https://indig.co.kr` 및 `http://localhost:5173` 을 허용합니다. 로컬 연동 중에는 모든 쿠키가 `.indig.co.kr` 의 `SameSite=None; Secure` 로 발급됩니다. 브라우저의 서드파티 쿠키 차단 여부에 따라 인증이 막힐 수 있습니다. 연동 완료 후 SameSite 정책을 되돌려야 합니다.
+
+가입 화면에서는 `GET /api/members/terms` 를 `credentials: 'include'` 로 호출하고, 성공 응답의 `X-XSRF-TOKEN` 헤더를 읽어 메모리에 보관합니다. Gateway 는 요청에 실린 `XSRF-TOKEN` 쿠키의 값을 이 헤더에 넣으며 CORS 에서 헤더 읽기를 허용합니다. 응답은 `Cache-Control: no-store` 로 캐시하지 않습니다. 쿠키가 없거나 약관 조회가 실패하면 토큰 헤더도 없으므로 가입 요청을 보내지 말고 로그인 및 브라우저 쿠키 차단 여부를 확인하세요. 토큰은 URL 에 넣지 않습니다.
+
+`POST /api/auth/signup` 에는 `credentials: 'include'` 및 `X-XSRF-TOKEN` 요청 헤더와 함께 `{ artistIds, agreements }` 를 보냅니다. 기존 CSRF 검증은 그대로 적용되므로 쿠키와 헤더가 같아야 합니다. 새로고침하면 약관을 다시 조회해 토큰을 받습니다.
 
 로그인 · 가입 전체 연동 순서는 [`프론트 연동 플로우`](../../docs/31_프론트_연동_플로우.md)를 참고하세요.

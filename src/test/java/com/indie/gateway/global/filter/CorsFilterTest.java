@@ -3,6 +3,7 @@ package com.indie.gateway.global.filter;
 import org.junit.jupiter.api.Test;
 import org.springframework.cloud.gateway.config.GlobalCorsProperties;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpCookie;
 import org.springframework.mock.http.server.reactive.MockServerHttpRequest;
 import org.springframework.mock.web.server.MockServerWebExchange;
 import org.springframework.web.cors.CorsConfiguration;
@@ -48,6 +49,20 @@ class CorsFilterTest {
 
         assertThat(next).isTrue();
         assertThat(exchange.getResponse().getHeaders().getAccessControlAllowOrigin()).isEqualTo(FRONT);
+        assertThat(exchange.getResponse().getHeaders().getAccessControlExposeHeaders()).contains("X-XSRF-TOKEN");
+    }
+
+    @Test
+    void termsTokenIsReadableFromAllowedFrontend() {
+        MockServerWebExchange exchange = MockServerWebExchange.from(MockServerHttpRequest.get(API + "/api/members/terms")
+                .header("Origin", FRONT).cookie(new HttpCookie("XSRF-TOKEN", "signup-csrf")));
+
+        filter.filter(exchange, e -> new TermsXsrfTokenFilter().filter(e, end -> end.getResponse().setComplete())).block();
+
+        assertThat(exchange.getResponse().getHeaders().getAccessControlAllowOrigin()).isEqualTo(FRONT);
+        assertThat(exchange.getResponse().getHeaders().getAccessControlExposeHeaders()).contains(CsrfFilter.HEADER);
+        assertThat(exchange.getResponse().getHeaders().getFirst(CsrfFilter.HEADER)).isEqualTo("signup-csrf");
+        assertThat(exchange.getResponse().getHeaders().getCacheControl()).isEqualTo("no-store");
     }
 
     @Test
@@ -76,6 +91,7 @@ class CorsFilterTest {
         c.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         c.setAllowedHeaders(List.of("*"));
         c.setAllowCredentials(true);
+        c.setExposedHeaders(List.of("X-XSRF-TOKEN"));
         GlobalCorsProperties props = new GlobalCorsProperties();
         props.getCorsConfigurations().put("/**", c);
         return props;
