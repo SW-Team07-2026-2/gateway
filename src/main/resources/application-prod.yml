@@ -6,7 +6,7 @@ spring:
 app:
   domain: ${APP_DOMAIN}
   cookie: { secure: true, same-site: Lax }    # 🔴 운영에서 secure 를 명시적으로 다시 선언
-  cors.origins: https://${app.domain}
+  cors.origins: https://${app.domain},http://localhost:5173
   redis:
     cache: { host: "${REDIS_CACHE_HOST}", port: 6379 }   # 캐시용 (AZ-c) — rate limit · 프로필 캐시 (50A)
 
