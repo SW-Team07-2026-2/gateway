@@ -2,6 +2,7 @@ package com.indie.gateway.domain.auth.service;
 
 import com.indie.gateway.domain.auth.client.MemberAuthClient;
 import com.indie.gateway.domain.auth.dto.request.IssueRequest;
+import com.indie.gateway.domain.auth.repository.CookieAuthorizationRequestRepository;
 import com.indie.gateway.global.config.GatewayProperties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -28,7 +29,7 @@ import java.util.Map;
  *    처음      → SIGNUP(사인업 토큰) · XSRF-TOKEN Set-Cookie → ⑤ 302 프론트 가입(밴드 고르기) — 회원은 POST /api/auth/signup 에서 생김
  * </pre>
  * 프론트는 사인업 토큰을 읽을 수 없습니다(HttpOnly) — 처음인지는 302 목적지로 압니다.
- * 🔴 에러 메시지를 쿼리에 그대로 넣지 않습니다 — 고정 코드만. 리다이렉트 대상도 설정의 고정 URL 만.
+ * 🔴 에러 메시지를 쿼리에 그대로 넣지 않습니다 — 고정 코드만. 리다이렉트는 운영 설정 또는 frontend=local 의 localhost:5173 만.
  */
 @Component
 public class OAuth2LoginHandler implements ServerAuthenticationSuccessHandler, ServerAuthenticationFailureHandler {
@@ -61,23 +62,23 @@ public class OAuth2LoginHandler implements ServerAuthenticationSuccessHandler, S
                         exchange.getResponse().addCookie(cookieFactory.signup(issued.signupToken()));
                         exchange.getResponse().addCookie(cookieFactory.expire(CookieFactory.AT));   // 다른 계정으로 로그인돼 있던 흔적
                         exchange.getResponse().addCookie(cookieFactory.expire(CookieFactory.RT));
-                        return redirect(exchange, props.signupRedirect());
+                        return redirect(exchange, props.signupRedirect(), "/signup");
                     }
                     exchange.getResponse().addCookie(cookieFactory.at(issued.accessToken()));
                     exchange.getResponse().addCookie(cookieFactory.rt(issued.refreshToken()));
                     exchange.getResponse().addCookie(cookieFactory.expireSignup());   // 같은 브라우저에서 그만둔 가입의 토큰
-                    return redirect(exchange, props.successRedirect());
+                    return redirect(exchange, props.successRedirect(), "/");
                 })
                 .onErrorResume(e -> {
                     log.error("oauth_signup_failed provider={} error={}", provider, e.toString());
-                    return redirect(exchange, props.failureRedirect() + "?error=signup_failed");
+                    return redirect(exchange, props.failureRedirect() + "?error=signup_failed", "/login?error=signup_failed");
                 });
     }
 
     @Override
     public Mono<Void> onAuthenticationFailure(WebFilterExchange webFilterExchange, AuthenticationException exception) {
         log.warn("oauth_failed error={}", exception.toString());
-        return redirect(webFilterExchange.getExchange(), props.failureRedirect() + "?error=oauth_failed");
+        return redirect(webFilterExchange.getExchange(), props.failureRedirect() + "?error=oauth_failed", "/login?error=oauth_failed");
     }
 
     /** 카카오 프로필 → Member 요청. 이메일 미동의면 email 은 null (Member 는 provider+providerUid 로 식별) · 10/28 로그인은 카카오만 */
@@ -92,7 +93,10 @@ public class OAuth2LoginHandler implements ServerAuthenticationSuccessHandler, S
         throw new IllegalArgumentException("unsupported provider: " + registrationId);
     }
 
-    private static Mono<Void> redirect(ServerWebExchange exchange, String location) {
+    private static Mono<Void> redirect(ServerWebExchange exchange, String location, String localPath) {
+        if (Boolean.TRUE.equals(exchange.getAttribute(CookieAuthorizationRequestRepository.LOCAL_FRONTEND))) {
+            location = "http://localhost:5173" + localPath;
+        }
         exchange.getResponse().setStatusCode(HttpStatus.FOUND);
         exchange.getResponse().getHeaders().setLocation(URI.create(location));
         return exchange.getResponse().setComplete();
