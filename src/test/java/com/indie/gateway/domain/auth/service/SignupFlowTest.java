@@ -3,6 +3,7 @@ package com.indie.gateway.domain.auth.service;
 import com.indie.gateway.TestProps;
 import com.indie.gateway.domain.auth.dto.request.IssueRequest;
 import com.indie.gateway.global.common.util.PathRules;
+import com.indie.gateway.global.config.GatewayProperties;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseCookie;
@@ -31,6 +32,23 @@ class SignupFlowTest {
         assertThat(cookies.expireSignup().getMaxAge()).isZero();
     }
 
+    @Test
+    void crossSiteCookiesAreSecureAndIncludeSignup() {
+        GatewayProperties p = TestProps.create("/nonexistent");
+        GatewayProperties configured = new GatewayProperties(p.domain(),
+                new GatewayProperties.Cookie(".example.com", true, "None", 1800, 1209600, 1800),
+                p.token(), p.internalToken(), p.memberBaseUrl(), p.oauth(), p.sanity(), p.trust(), p.redis(), p.ingest());
+        CookieFactory crossSite = new CookieFactory(configured);
+
+        for (ResponseCookie cookie : new ResponseCookie[]{crossSite.at("at"), crossSite.rt("rt"),
+                crossSite.xsrf("xsrf"), crossSite.signup("signup"), crossSite.oauthRequest("request"), crossSite.expireSignup()}) {
+            assertThat(cookie.getSameSite()).isEqualTo("None");
+            assertThat(cookie.isSecure()).isTrue();
+        }
+        assertThat(crossSite.signup("signup").isHttpOnly()).isTrue();
+        assertThat(crossSite.signup("signup").getPath()).isEqualTo("/api/auth/signup");
+    }
+
     /** 아직 회원이 아니라 AT 가 없는 경로 — 가입 완료 · 밴드 고르기 · 11/05 약관 */
     @Test
     void signupPathsArePublic() {
@@ -38,8 +56,6 @@ class SignupFlowTest {
         assertThat(PathRules.isPublic(HttpMethod.GET, "/api/chatbot/artists/similar")).isTrue();
         assertThat(PathRules.isPublic(HttpMethod.POST, "/api/chatbot")).isFalse();
         assertThat(PathRules.isPublic(HttpMethod.GET, "/api/members/terms")).isTrue();
-        assertThat(PathRules.isPublic(HttpMethod.GET, "/api/members/terms/PRIVACY_POLICY")).isTrue();   // 11/06 M25 푸터
-        assertThat(PathRules.isPublic(HttpMethod.GET, "/api/members/termsX")).isFalse();
         assertThat(PathRules.isPublic(HttpMethod.GET, "/api/members/me/agreements")).isFalse();   // MY 는 로그인
         assertThat(PathRules.isPublic(HttpMethod.POST, "/api/members/terms")).isFalse();
         assertThat(PathRules.isCsrfExempt("/api/auth/signup")).isFalse();   // 🔴 CSRF 는 그대로

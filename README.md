@@ -17,6 +17,6 @@ window.location.href = 'https://api.indig.co.kr/oauth2/authorization/kakao?front
 
 카카오에 등록된 콜백은 **`https://api.indig.co.kr/oauth2/code/kakao` 그대로**입니다. 프론트는 `/`, `/signup`, `/login` 화면을 준비합니다. 카카오 인증 후 신규 사용자는 아직 가입 전이므로 `/signup` 화면을 표시하고, 가입 완료 전 `/api/auth/me` 의 401 을 로그인 재시작으로 처리하지 않습니다.
 
-이 기능은 **로그인 후 화면 이동만** 지원합니다. 현재 운영 CORS 는 `https://indig.co.kr` 만 허용하고, 인증 쿠키는 `.indig.co.kr` 의 `SameSite=Lax`, 가입 쿠키는 `SameSite=Strict` 입니다. 따라서 `localhost:5173` 에서 운영 API 로 로그인 상태 조회 · 가입 완료까지 수행하려면 CORS 와 쿠키 · CSRF 전달을 별도로 맞춰야 합니다. `credentials: 'include'` 나 복귀 주소 변경만으로 해결되지는 않습니다.
+운영 CORS 는 `https://indig.co.kr` 및 `http://localhost:5173` 을 허용합니다. 로컬 연동 중에는 모든 쿠키가 `.indig.co.kr` 의 `SameSite=None; Secure` 로 발급됩니다. 브라우저의 서드파티 쿠키 차단 여부에 따라 인증이 막힐 수 있습니다. 또한 localhost JavaScript 는 `.indig.co.kr` 의 XSRF 쿠키를 읽을 수 없으므로 가입을 포함한 상태 변경 요청의 CSRF 토큰 전달은 별도로 처리해야 합니다. 연동 완료 후 SameSite 정책을 되돌려야 합니다.
 
 로그인 · 가입 전체 연동 순서는 [`프론트 연동 플로우`](../../docs/31_프론트_연동_플로우.md)를 참고하세요.
