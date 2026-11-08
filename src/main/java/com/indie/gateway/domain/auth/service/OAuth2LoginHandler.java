@@ -62,7 +62,7 @@ public class OAuth2LoginHandler implements ServerAuthenticationSuccessHandler, S
                         exchange.getResponse().addCookie(cookieFactory.signup(issued.signupToken()));
                         exchange.getResponse().addCookie(cookieFactory.expire(CookieFactory.AT));   // 다른 계정으로 로그인돼 있던 흔적
                         exchange.getResponse().addCookie(cookieFactory.expire(CookieFactory.RT));
-                        return redirect(exchange, props.signupRedirect(), "/signup");
+                        return redirect(exchange, props.signupRedirect(), "/welcome");
                     }
                     exchange.getResponse().addCookie(cookieFactory.at(issued.accessToken()));
                     exchange.getResponse().addCookie(cookieFactory.rt(issued.refreshToken()));

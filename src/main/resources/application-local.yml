@@ -26,7 +26,7 @@ app:
   oauth:
     redirect-base: http://localhost:8080    # 카카오 콘솔에 별도 등록 필요 (§15)
     success-redirect: http://localhost:5173/
-    signup-redirect: http://localhost:5173/signup
+    signup-redirect: http://localhost:5173/welcome
     failure-redirect: http://localhost:5173/login
   sanity:
     allowed-hosts: [localhost, 127.0.0.1]

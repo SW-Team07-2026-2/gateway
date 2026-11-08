@@ -126,6 +126,21 @@ public class AuthController {
     }
 
     /**
+     * 11/08 가입 화면 진입 확인 — SIGNUP 쿠키(사인업 토큰)가 있으면 200, 없으면 401 SIGNUP_EXPIRED (프론트는 화면을 닫고 돌려보냄).
+     * 쿠키가 HttpOnly 라 프론트가 못 읽고, Path=/api/auth/signup 이라 이 주소로만 실려서 G13 과 같은 경로의 GET 입니다.
+     * 있는지만 봅니다 — 서명 키는 Member 에만 있습니다. 쿠키 수명 = 토큰 수명이고 가입 완료 · 401 때 지우므로 화면 판단에는 충분하고,
+     * 최종 검증은 G13 이 합니다.
+     */
+    @GetMapping("/signup")
+    public Mono<Void> signupStatus(ServerWebExchange exchange) {
+        HttpCookie signup = exchange.getRequest().getCookies().getFirst(CookieFactory.SIGNUP);
+        if (signup == null || signup.getValue().isBlank()) {
+            return ErrorResponses.write(exchange, AuthErrorCode.SIGNUP_EXPIRED);
+        }
+        return ErrorResponses.write(exchange, HttpStatus.OK, ApiResponse.onSuccess(Map.of("ok", true)));
+    }
+
+    /**
      * 가입 완료 — 약관 동의 → 밴드 고르기의 「완료」 · 「건너뛰기」. SIGNUP 쿠키(사인업 토큰) + CSRF 헤더 · { artistIds, agreements }.
      * Member 가 회원 · 팔로우 · 동의 이력을 만들면 AT · RT 를 굽고 SIGNUP 은 지웁니다.
      * 토큰이 없거나 만료 · 이미 사용이면 401 SIGNUP_EXPIRED, 위조 · 형식 오류면 401 SIGNUP_INVALID (프론트는 둘 다 로그인 화면으로).
