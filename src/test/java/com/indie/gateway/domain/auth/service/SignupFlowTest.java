@@ -35,6 +35,7 @@ class SignupFlowTest {
     @Test
     void signupPathsArePublic() {
         assertThat(PathRules.isPublic(HttpMethod.POST, "/api/auth/signup")).isTrue();
+        assertThat(PathRules.isPublic(HttpMethod.GET, "/api/auth/signup")).isTrue();   // 11/08 가입 화면 진입 확인
         assertThat(PathRules.isPublic(HttpMethod.GET, "/api/chatbot/artists/similar")).isTrue();
         assertThat(PathRules.isPublic(HttpMethod.POST, "/api/chatbot")).isFalse();
         assertThat(PathRules.isPublic(HttpMethod.GET, "/api/members/terms")).isTrue();
