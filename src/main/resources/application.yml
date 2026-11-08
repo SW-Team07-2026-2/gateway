@@ -87,7 +87,7 @@ app:
   oauth:
     redirect-base: https://api.${app.domain}
     success-redirect: https://${app.domain}/            # ★ 허용 목록 — 고정값만
-    signup-redirect: https://${app.domain}/signup       # 처음 로그인 → 밴드 고르기 (SIGNUP 쿠키)
+    signup-redirect: https://${app.domain}/welcome      # 처음 로그인 → 약관 동의 · 취향 선택 (SIGNUP 쿠키)
     failure-redirect: https://${app.domain}/login
   sanity:                                               # ⓪ 필터 한계값 (§5-⓪)
     max-body-bytes: 1048576                             # 1 MiB — ✏️ 11/04 무대 이미지 업로드 예외(10 MiB · /api/studio/)는 관리자 진입과 같이 KT 로 (56B)

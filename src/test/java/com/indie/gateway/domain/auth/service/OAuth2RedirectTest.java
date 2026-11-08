@@ -46,7 +46,7 @@ class OAuth2RedirectTest {
         handler(Mono.just(new IssueResponse(null, null, null, List.of(), null, true, "signup-token")))
                 .onAuthenticationSuccess(webFilter(callback), authentication).block();
 
-        assertLocation(callback, (local ? "http://localhost:5173" : "https://example.com") + "/signup");
+        assertLocation(callback, (local ? "http://localhost:5173" : "https://example.com") + "/welcome");
         assertThat(callback.getResponse().getCookies().getFirst(CookieFactory.SIGNUP).getValue()).isEqualTo("signup-token");
         assertThat(callback.getResponse().getCookies().getFirst(CookieFactory.OAUTH_REQUEST).getMaxAge()).isZero();
     }
@@ -93,7 +93,7 @@ class OAuth2RedirectTest {
         handler(Mono.just(new IssueResponse(null, null, null, List.of(), null, true, "signup-token")))
                 .onAuthenticationSuccess(webFilter(callback), authentication).block();
 
-        assertLocation(callback, "https://example.com/signup");
+        assertLocation(callback, "https://example.com/welcome");
     }
 
     @Test
@@ -103,7 +103,7 @@ class OAuth2RedirectTest {
         handler(Mono.just(new IssueResponse(null, null, null, List.of(), null, true, "signup-token")))
                 .onAuthenticationSuccess(webFilter(callback), authentication).block();
 
-        assertLocation(callback, "https://example.com/signup");
+        assertLocation(callback, "https://example.com/welcome");
     }
 
     @Test

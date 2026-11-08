@@ -15,7 +15,7 @@ public final class TestProps {
                         Duration.ofMinutes(10), Duration.ofSeconds(30), fallbackKeyPath),
                 new GatewayProperties.InternalToken("gateway", "member", 300),
                 "http://127.0.0.1:1",
-                new GatewayProperties.OAuth("https://api.example.com", "https://example.com/", "https://example.com/signup", "https://example.com/login"),
+                new GatewayProperties.OAuth("https://api.example.com", "https://example.com/", "https://example.com/welcome", "https://example.com/login"),
                 new GatewayProperties.Sanity(1048576, 30, 64, 8192, 20, List.of("api.example.com")),
                 new GatewayProperties.Trust(1),
                 new GatewayProperties.Redis(new GatewayProperties.Redis.Endpoint("localhost", 6380)),
