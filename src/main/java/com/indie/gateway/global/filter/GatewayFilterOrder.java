@@ -12,6 +12,7 @@ public final class GatewayFilterOrder {
     public static final int REQUEST_SANITY = -200;       // ⓪
     public static final int CORRELATION_ID = -190;       // ⓪'
     public static final int CORS = -180;                 // ⓪'' 프리플라이트는 ② 토큰 · ⑤ CSRF 검사 전에 응답
+    public static final int TERMS_XSRF = -170;           // 허용된 약관 조회 응답에서 가입용 CSRF 토큰 전달
     public static final int CLIENT_HEADER_STRIP = -150;  // ① 🔴 반드시 ② 보다 먼저
     public static final int INGEST = -140;               // 수집 /ingest/** (docs/22) — ① 뒤라야 이 필터가 붙인 X-Internal-Token 이 지워지지 않음
     public static final int ACCESS_TOKEN = -100;         // ②

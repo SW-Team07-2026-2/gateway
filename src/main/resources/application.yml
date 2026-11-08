@@ -22,6 +22,7 @@ spring:
             allowed-origins: ${app.cors.origins}
             allowed-methods: [GET, POST, PUT, PATCH, DELETE, OPTIONS]
             allowed-headers: ['*']
+            exposed-headers: [X-XSRF-TOKEN]
             allow-credentials: true                     # ★ 쿠키 인증이라 필수
             max-age: 3600
 

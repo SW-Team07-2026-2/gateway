@@ -45,15 +45,18 @@ public class CookieFactory {
     }
 
     /**
-     * 사인업 토큰 — 처음 로그인한 사람에게 AT · RT 대신. 가입 API 에만 실리도록 Path 를 좁히고 SameSite=Strict
-     * (프론트 → API 는 같은 사이트라 Strict 로도 실립니다)
+     * 사인업 토큰 — 가입 API 에만 실리도록 Path 를 좁힙니다. 로컬 프론트 연동 중에는 None 을 사용합니다.
      */
     public ResponseCookie signup(String value) {
-        return build(SIGNUP, value, true, Duration.ofSeconds(props.signupMaxAge()), SIGNUP_PATH, "Strict");
+        return build(SIGNUP, value, true, Duration.ofSeconds(props.signupMaxAge()), SIGNUP_PATH, signupSameSite());
     }
 
     public ResponseCookie expireSignup() {
-        return build(SIGNUP, "", true, Duration.ZERO, SIGNUP_PATH, "Strict");
+        return build(SIGNUP, "", true, Duration.ZERO, SIGNUP_PATH, signupSameSite());
+    }
+
+    private String signupSameSite() {
+        return "None".equalsIgnoreCase(props.sameSite()) ? "None" : "Strict";
     }
 
     /** OAuth 인가 요청 보관 — 세션 대신 쿠키 (replica 2 에서 authorization_request_not_found 방지) */
