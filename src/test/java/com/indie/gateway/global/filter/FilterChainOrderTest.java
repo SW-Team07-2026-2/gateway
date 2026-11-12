@@ -20,7 +20,8 @@ class FilterChainOrderTest {
         assertThat(new int[]{GatewayFilterOrder.REQUEST_SANITY, GatewayFilterOrder.CORRELATION_ID,
                 GatewayFilterOrder.CLIENT_HEADER_STRIP, GatewayFilterOrder.INGEST, GatewayFilterOrder.ACCESS_TOKEN,
                 GatewayFilterOrder.PREEMPTIVE_REFRESH, GatewayFilterOrder.BLACKLIST, GatewayFilterOrder.CSRF,
-                GatewayFilterOrder.RATE_LIMIT, GatewayFilterOrder.USER_HEADER_INJECT}).isSorted();
+                GatewayFilterOrder.RATE_LIMIT, GatewayFilterOrder.USER_HEADER_INJECT,
+                GatewayFilterOrder.WITHDRAWAL_COOKIE}).isSorted();
     }
 
     /** DoD 1 — X-User-Id: 999 를 직접 보낸 요청 → 하위로 전달되는 헤더에 999 가 없음 */

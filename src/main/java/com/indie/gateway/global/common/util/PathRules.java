@@ -12,7 +12,7 @@ public final class PathRules {
      * ✏️ 11/04 56B · 57A — 관리자 경로(/api/studio · /api/admin-ai · /api/stage-jobs)는 KT 로 빠져 여기 없습니다
      */
     private static final List<String> KNOWN_PREFIXES = List.of(
-            "/api/members", "/api/catalog", "/api/concerts", "/api/payments",
+            "/api/members", "/api/catalog", "/api/cart", "/api/concerts", "/api/payments",
             "/api/chatbot", "/api/auth");
 
     public static boolean isKnown(String path) {

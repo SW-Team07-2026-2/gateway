@@ -46,17 +46,18 @@ import java.util.concurrent.TimeoutException;
 import java.util.regex.Pattern;
 
 /**
- * 수집 경로 /ingest/** — Gateway 1차 검사 (docs/22 §1-4 G1~G9). 수집기는 묶음(items 최대 500건)으로 보내고,
+ * 서명 경로 /ingest/** — Gateway 1차 검사 (docs/22 §1-4 G1~G9). 수집기는 묶음(items 최대 500건)으로 보내고,
  * 여기서는 <b>누가 · 어디서 · 얼마나 · 봉투가 온전한가</b>만 봅니다. 항목 안의 필드는 서비스 2차가 봅니다.
+ * AI 가 회원 1명의 메트릭 · 벡터를 읽고 쓰는 회원 데이터 경로(/ingest/members/**)도 같은 검사를 거칩니다 — 다른 점은 ✏️ 표시.
  * <pre>
  * G1 출처      ALB · Cloudflare 를 거친 요청 · 클러스터 밖 Host → 404
- * G2 고정 매핑 IngestRoute 에 없으면 404 · POST 만 · 쿼리 금지
- * G3 형식      JSON 만 415 · 본문 1 MiB 413 (chunked 도 읽으면서 끊음) · 본문이 10초 안에 다 안 오면 408
- * G4 서명      HMAC-SHA256 (본문 해시 포함 → 본문 변조도 여기서 걸림) 401
+ * G2 고정 매핑 IngestRoute 에 없으면 404 · 그 경로의 메서드가 아니면 405 · 쿼리는 ✏️ 조회(GET)에서만
+ * G3 형식      JSON 만 415 (✏️ 조회는 본문이 없어 건너뜀) · 본문 1 MiB 413 (chunked 도 읽으면서 끊음) · 본문이 10초 안에 다 안 오면 408
+ * G4 서명      HMAC-SHA256 (메서드 · 경로 · ✏️ 쿼리 · 본문 해시 포함 → 변조도 여기서 걸림) 401 · ✏️ 키는 경로의 키 묶음에서만 찾음
  * G5 재전송    시각 ±300초 · nonce SET NX 401 · 🔴 Redis 장애면 503 (fail-closed — 배치라 재시도하면 됨)
  * G7 호출 한도 키별 초당 10건 429 — 봉투 파싱(G6) 전에 둬서 CPU 도 같이 보호합니다
- * G6 봉투      JSON · 깊이 10 · 최상위 items 배열 1~maxItems 건 400
- * G8 기록      묶음 1건 = 로그 1줄 (본문은 남기지 않음 — 해시만)
+ * G6 봉투      JSON · 깊이 10 · 최상위 items 배열 1~maxItems 건 400 (✏️ 회원 데이터는 묶음이 아니라 건너뜀)
+ * G8 기록      요청 1건 = 로그 1줄 (본문은 남기지 않음 — 해시만)
  * G9 전달      새 X-Internal-Token (iss=gateway · sub=ingest:{키} · body_sha256 · TTL 60초)
  * </pre>
  * 하위 서비스 연결 실패 · 응답 지연은 라우트(RouteConfig)의 재시도 · 타임아웃 · Circuit Breaker 가 맡습니다.
@@ -120,19 +121,22 @@ public class IngestFilter implements WebFilter, Ordered {
             return reject(exchange, "source_host", keyId, CommonErrorCode.NOT_FOUND);
         }
         // G2 — 여기부터는 클러스터 안 호출이라 경로 · 메서드를 구분해 알려줍니다
-        IngestRoute route = IngestRoute.of(path).orElse(null);
-        if (route == null) {
+        List<IngestRoute> mapped = IngestRoute.of(path);
+        if (mapped.isEmpty()) {
             return reject(exchange, "route", keyId, CommonErrorCode.NOT_FOUND);
         }
-        if (!HttpMethod.POST.equals(request.getMethod())) {
+        IngestRoute route = mapped.stream().filter(r -> r.method().equals(request.getMethod())).findFirst().orElse(null);
+        if (route == null) {
             return reject(exchange, "method", keyId, CommonErrorCode.METHOD_NOT_ALLOWED);
         }
-        if (!request.getQueryParams().isEmpty()) {   // 서명이 쿼리를 덮지 않으므로 받지 않습니다
+        boolean read = HttpMethod.GET.equals(route.method());
+        String target = target(request);
+        if (!read && !target.equals(path)) {   // 쿼리는 조회에서만 받습니다 (서명에 포함)
             return reject(exchange, "query", keyId, CommonErrorCode.INVALID_REQUEST);
         }
-        // G3
+        // G3 — 조회는 본문이 없습니다
         MediaType type = headers.getContentType();
-        if (type == null || !MediaType.APPLICATION_JSON.isCompatibleWith(type)) {
+        if (!read && (type == null || !MediaType.APPLICATION_JSON.isCompatibleWith(type))) {
             return reject(exchange, "content_type", keyId, CommonErrorCode.UNSUPPORTED_MEDIA_TYPE);
         }
         String timestamp = headers.getFirst(TIMESTAMP);
@@ -161,14 +165,14 @@ public class IngestFilter implements WebFilter, Ordered {
                 .onErrorResume(TimeoutException.class, e -> Mono.just(Body.failed(IngestErrorCode.INGEST_BODY_TIMEOUT)))
                 .flatMap(body -> body.rejection() != null
                         ? reject(exchange, "body", keyId, body.rejection())
-                        : verify(exchange, chain, route, keyId, timestamp, nonce, signature, body.bytes(), started));
+                        : verify(exchange, chain, route, keyId, target, timestamp, nonce, signature, body.bytes(), started));
     }
 
-    private Mono<Void> verify(ServerWebExchange exchange, WebFilterChain chain, IngestRoute route, String keyId,
+    private Mono<Void> verify(ServerWebExchange exchange, WebFilterChain chain, IngestRoute route, String keyId, String target,
                               String timestamp, String nonce, String signature, byte[] body, long started) {
         String bodySha256 = sha256Hex(body);
         // G4
-        if (!verifier.verify(keyId, route.path(), timestamp, nonce, bodySha256, signature)) {
+        if (!verifier.verify(route.keySet(), keyId, route.method().name(), target, timestamp, nonce, bodySha256, signature)) {
             return reject(exchange, "signature", keyId, IngestErrorCode.INGEST_SIGNATURE_INVALID);
         }
         // G5 — 시각
@@ -199,8 +203,8 @@ public class IngestFilter implements WebFilter, Ordered {
                     if (!limit.isAllowed()) {
                         return reject(exchange, "rate_limit", keyId, CommonErrorCode.TOO_MANY_REQUESTS);
                     }
-                    // G6
-                    int items = countItems(body, route.maxItems());
+                    // G6 — 묶음(items)을 받는 경로만
+                    int items = route.maxItems() == 0 ? 0 : countItems(body, route.maxItems());
                     if (items < 0) {
                         return reject(exchange, "envelope", keyId, CommonErrorCode.INVALID_REQUEST);
                     }
@@ -208,10 +212,11 @@ public class IngestFilter implements WebFilter, Ordered {
                     ServerWebExchange forwarded = exchange.mutate()
                             .request(withBody(exchange, tokenIssuer.issueForIngest(route.audience(), keyId, bodySha256), body))
                             .build();
-                    // G8 — 묶음 1건 = 1줄. 결과 상태는 하위 서비스 응답(또는 폴백) 뒤에 확정됩니다
+                    // G8 — 요청 1건 = 1줄. 결과 상태는 하위 서비스 응답(또는 폴백) 뒤에 확정됩니다.
+                    //   경로는 실제 값 — 회원 데이터 경로는 어느 회원을 읽고 썼는지 남습니다 (쿼리는 남기지 않음)
                     return chain.filter(forwarded).doFinally(signal -> log.info(
-                            "ingest_request key={} path={} items={} bytes={} body_sha256={} status={} elapsed_ms={}",
-                            keyId, route.path(), items, body.length, bodySha256,
+                            "ingest_request key={} method={} path={} items={} bytes={} body_sha256={} status={} elapsed_ms={}",
+                            keyId, route.method(), exchange.getRequest().getPath().value(), items, body.length, bodySha256,
                             exchange.getResponse().getStatusCode(), (System.nanoTime() - started) / 1_000_000));
                 });
     }
@@ -259,6 +264,13 @@ public class IngestFilter implements WebFilter, Ordered {
             exchange.getResponse().getHeaders().set(HttpHeaders.RETRY_AFTER, retryAfter);
         }
         return ErrorResponses.write(exchange, code);
+    }
+
+    /** 서명 대상 — 경로 + (쿼리가 있으면 "?" + 보낸 그대로의 쿼리) */
+    private static String target(ServerHttpRequest request) {
+        String path = request.getPath().value();
+        String query = request.getURI().getRawQuery();
+        return query == null || query.isEmpty() ? path : path + "?" + query;
     }
 
     private boolean isClusterHost(HttpHeaders headers) {
