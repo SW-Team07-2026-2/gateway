@@ -22,6 +22,7 @@ public final class GatewayFilterOrder {
     public static final int RATE_LIMIT = -60;            // ⑥
     public static final int OAUTH2_LOGIN = -55;          // Spring Security OAuth2 (⑥ 뒤에서 실행돼야 IP 한도가 걸림)
     public static final int USER_HEADER_INJECT = -50;    // ⑦
+    public static final int WITHDRAWAL_COOKIE = -40;     // 탈퇴 성공 응답에서 인증 쿠키 삭제 — ②~⑦ 을 통과한 요청에만 걸리도록 맨 뒤
 
     private GatewayFilterOrder() {}
 }

@@ -16,6 +16,7 @@ import org.springframework.core.io.buffer.DataBufferUtils;
 import org.springframework.core.io.buffer.DefaultDataBufferFactory;
 import org.springframework.data.redis.RedisConnectionFailureException;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.mock.env.MockEnvironment;
 import org.springframework.mock.http.server.reactive.MockServerHttpRequest;
@@ -50,6 +51,11 @@ class IngestFilterTest {
     static final String SHARED = "0123456789abcdef0123456789abcdef-local";
     static final String PATH = "/ingest/catalog/artists";
     static final String BODY = "{\"items\":[{\"source\":\"melon\",\"external_id\":\"a1\",\"name\":\"밴드\"}]}";
+    static final String MEMBER_KEY_ID = "ai-test";
+    static final String MEMBER_KEY = "member-key-0123456789abcdef0123456789";
+    static final String METRICS = "/ingest/members/42/metrics";
+    static final String EMBEDDING = "/ingest/members/42/embedding";
+    static final String VECTOR = "{\"embedding\":\"[0.0123,-0.0456]\"}";
 
     private final IngestNonceStore nonceStore = mock(IngestNonceStore.class);
     private final RedisRateLimiter rateLimiter = mock(RedisRateLimiter.class);
@@ -61,7 +67,8 @@ class IngestFilterTest {
     }
 
     private IngestFilter filter(GatewayProperties props) throws Exception {
-        MockEnvironment env = new MockEnvironment().withProperty("ingest.keys." + KEY_ID, KEY);
+        MockEnvironment env = new MockEnvironment().withProperty("ingest.keys." + KEY_ID, KEY)
+                .withProperty("ingest.member-keys." + MEMBER_KEY_ID, MEMBER_KEY);
         return new IngestFilter(props, new IngestSignatureVerifier(env), nonceStore, rateLimiter,
                 new InternalTokenIssuer(SHARED, props, Clock.systemUTC()), new SimpleMeterRegistry(), Clock.systemUTC());
     }
@@ -102,11 +109,32 @@ class IngestFilterTest {
     }
 
     static String sign(String key, String path, long timestamp, String nonce, String body) throws Exception {
+        return sign(key, "POST", path, timestamp, nonce, body);
+    }
+
+    static String sign(String key, String method, String target, long timestamp, String nonce, String body) throws Exception {
         String bodyHash = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(body.getBytes(StandardCharsets.UTF_8)));
         Mac mac = Mac.getInstance("HmacSHA256");
         mac.init(new SecretKeySpec(key.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
-        byte[] sig = mac.doFinal(("POST\n" + path + "\n" + timestamp + "\n" + nonce + "\n" + bodyHash).getBytes(StandardCharsets.UTF_8));
+        byte[] sig = mac.doFinal((method + "\n" + target + "\n" + timestamp + "\n" + nonce + "\n" + bodyHash).getBytes(StandardCharsets.UTF_8));
         return Base64.getEncoder().encodeToString(sig);
+    }
+
+    /** 회원 데이터 경로 — AI 가 보내는 모양. sent 는 실제로 보내는 주소, signedTarget 은 서명에 넣은 주소(경로 + 쿼리) */
+    static MockServerHttpRequest.BodyBuilder memberSigned(HttpMethod method, String sent, String signedTarget, String body,
+                                                          String keyId, String key) throws Exception {
+        long timestamp = now();
+        String nonce = UUID.randomUUID().toString();
+        return MockServerHttpRequest.method(method, sent)
+                .header("Host", "gateway.indie.svc.cluster.local:8080")
+                .header(IngestFilter.KEY_ID, keyId)
+                .header(IngestFilter.TIMESTAMP, String.valueOf(timestamp))
+                .header(IngestFilter.NONCE, nonce)
+                .header(IngestFilter.SIGNATURE, sign(key, method.name(), signedTarget, timestamp, nonce, body));
+    }
+
+    static MockServerHttpRequest.BodyBuilder memberSigned(HttpMethod method, String target, String body) throws Exception {
+        return memberSigned(method, target, target, body, MEMBER_KEY_ID, MEMBER_KEY);
     }
 
     static long now() {
@@ -335,5 +363,109 @@ class IngestFilterTest {
     void nestingDeeperThan10Is400() throws Exception {
         String body = "{\"items\":[" + "[".repeat(9) + "]".repeat(9) + "]}";
         assertThat(status(run(signed(PATH, body).body(body)))).isEqualTo(400);
+    }
+
+    // ── 회원 데이터 경로 (AI → Member) ─────────────────────────────────
+
+    /** 조회 — 본문 · Content-Type 없이, 쿼리까지 서명해 보냅니다. Member 로 가는 내부 토큰은 aud=member */
+    @Test
+    void memberMetricsQueryIsForwardedWithMemberToken() throws Exception {
+        String target = METRICS + "?from=2026-11-01T00:00:00Z&metricType=DETAIL_VIEW,DWELL&aggregate=true";
+
+        MockServerWebExchange exchange = run(memberSigned(HttpMethod.GET, target, "").build());
+
+        assertThat(status(exchange)).isEqualTo(200);
+        var forwarded = passed.get().getRequest();
+        assertThat(forwarded.getPath().value()).isEqualTo(METRICS);
+        assertThat(forwarded.getQueryParams().getFirst("metricType")).isEqualTo("DETAIL_VIEW,DWELL");
+        JWTClaimsSet claims = SignedJWT.parse(forwarded.getHeaders().getFirst("X-Internal-Token")).getJWTClaimsSet();
+        assertThat(claims.getAudience()).containsExactly("member");
+        assertThat(claims.getSubject()).isEqualTo("ingest:" + MEMBER_KEY_ID);
+    }
+
+    /** 쓰기 — 묶음(items)이 아닌 본문도 받습니다. 본문은 그대로 Member 로 */
+    @Test
+    void memberEmbeddingPutIsForwardedWithSameBody() throws Exception {
+        MockServerWebExchange exchange = run(memberSigned(HttpMethod.PUT, EMBEDDING, VECTOR)
+                .contentType(MediaType.APPLICATION_JSON).body(VECTOR));
+
+        assertThat(status(exchange)).isEqualTo(200);
+        var forwarded = passed.get().getRequest();
+        assertThat(forwarded.getMethod()).isEqualTo(HttpMethod.PUT);
+        assertThat(DataBufferUtils.join(forwarded.getBody()).map(b -> b.toString(StandardCharsets.UTF_8)).block()).isEqualTo(VECTOR);
+        assertThat(SignedJWT.parse(forwarded.getHeaders().getFirst("X-Internal-Token")).getJWTClaimsSet().getStringClaim("body_sha256"))
+                .isEqualTo(HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(VECTOR.getBytes(StandardCharsets.UTF_8))));
+    }
+
+    @Test
+    void memberEmbeddingGetIsForwarded() throws Exception {
+        assertThat(status(run(memberSigned(HttpMethod.GET, EMBEDDING, "").build()))).isEqualTo(200);
+        assertThat(passed.get().getRequest().getMethod()).isEqualTo(HttpMethod.GET);
+    }
+
+    /** 🔴 수집 키로는 회원 데이터를 읽을 수 없고, 회원 데이터 키로는 수집 경로에 쓸 수 없습니다 */
+    @Test
+    void keySetsDoNotOpenEachOthersRoutes() throws Exception {
+        MockServerWebExchange read = run(memberSigned(HttpMethod.GET, METRICS, METRICS, "", KEY_ID, KEY).build());
+        assertThat(status(read)).isEqualTo(401);
+        assertThat(responseBody(read)).contains("INGEST_SIGNATURE_INVALID");
+
+        MockServerHttpRequest write = signed(PATH, BODY, now(), MEMBER_KEY, "gateway", MEMBER_KEY_ID).body(BODY);
+        assertThat(status(run(write))).isEqualTo(401);
+        assertThat(passed.get()).isNull();
+    }
+
+    /** 서명은 쿼리도 덮습니다 — limit=10 서명으로 limit=1000 을 보낼 수 없음 */
+    @Test
+    void tamperedQueryIs401() throws Exception {
+        assertThat(status(run(memberSigned(HttpMethod.GET, METRICS + "?limit=1000", METRICS + "?limit=10", "",
+                MEMBER_KEY_ID, MEMBER_KEY).build()))).isEqualTo(401);
+        assertThat(status(run(memberSigned(HttpMethod.GET, METRICS + "?limit=10", METRICS, "",
+                MEMBER_KEY_ID, MEMBER_KEY).build()))).isEqualTo(401);
+    }
+
+    /** 서명은 메서드도 덮습니다 — 벡터 조회(GET) 서명으로 저장(PUT)할 수 없음 */
+    @Test
+    void signatureForAnotherMethodIs401() throws Exception {
+        long ts = now();
+        String nonce = UUID.randomUUID().toString();
+        MockServerHttpRequest request = MockServerHttpRequest.put(EMBEDDING).header("Host", "gateway")
+                .contentType(MediaType.APPLICATION_JSON)
+                .header(IngestFilter.KEY_ID, MEMBER_KEY_ID).header(IngestFilter.TIMESTAMP, String.valueOf(ts))
+                .header(IngestFilter.NONCE, nonce)
+                .header(IngestFilter.SIGNATURE, sign(MEMBER_KEY, "GET", EMBEDDING, ts, nonce, VECTOR))
+                .body(VECTOR);
+        assertThat(status(run(request))).isEqualTo(401);
+    }
+
+    @Test
+    void memberPathWithUnmappedMethodIs405() throws Exception {
+        assertThat(status(run(MockServerHttpRequest.post(METRICS).header("Host", "gateway").build()))).isEqualTo(405);
+        assertThat(status(run(MockServerHttpRequest.delete(EMBEDDING).header("Host", "gateway").build()))).isEqualTo(405);
+    }
+
+    @Test
+    void memberPathOutsideMappingIs404() throws Exception {
+        for (String path : List.of("/ingest/members/42", "/ingest/members/42/profile", "/ingest/members/42/metrics/raw",
+                "/ingest/members//metrics")) {
+            assertThat(status(run(MockServerHttpRequest.get(path).header("Host", "gateway").build()))).as(path).isEqualTo(404);
+        }
+    }
+
+    /** 쓰기에는 쿼리를 받지 않고(400) JSON 만 받습니다(415) — 수집 경로와 같은 규칙 */
+    @Test
+    void memberEmbeddingPutFollowsWriteRules() throws Exception {
+        assertThat(status(run(memberSigned(HttpMethod.PUT, EMBEDDING + "?x=1", VECTOR)
+                .contentType(MediaType.APPLICATION_JSON).body(VECTOR)))).isEqualTo(400);
+        assertThat(status(run(memberSigned(HttpMethod.PUT, EMBEDDING, VECTOR)
+                .contentType(MediaType.TEXT_PLAIN).body(VECTOR)))).isEqualTo(415);
+    }
+
+    /** 외부(ALB · Cloudflare 경유)에서는 서명이 맞아도 경로가 없는 것처럼 404 */
+    @Test
+    void memberPathThroughAlbIs404() throws Exception {
+        assertThat(status(run(memberSigned(HttpMethod.GET, METRICS, "").header("X-Amzn-Trace-Id", "Root=1-abc").build())))
+                .isEqualTo(404);
+        assertThat(passed.get()).isNull();
     }
 }

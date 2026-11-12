@@ -33,6 +33,10 @@ public class RouteConfig {
                 .route("catalog", r -> r.path("/api/catalog", "/api/catalog/**")
                         .filters(f -> retryGet(f).circuitBreaker(c -> c.setName("catalog").setFallbackUri("forward:/fallback/catalog")))
                         .uri("lb://catalog"))
+                // 장바구니 — Member 위시리스트를 없애고 Catalog 의 cart_item 으로 옮겼습니다. 공개 경로가 아니라 로그인 필수 (PathRules)
+                .route("cart", r -> r.path("/api/cart", "/api/cart/**")
+                        .filters(f -> retryGet(f).circuitBreaker(c -> c.setName("catalog").setFallbackUri("forward:/fallback/catalog")))
+                        .uri("lb://catalog"))
                 // ✏️ 11/04 75-5 — 좌석 선점(N10) · 결제 승인(N16)은 Concert 가 Payment 를 두 번 부를 수 있어 최악 8초 (docs/30 R8).
                 //   이 두 경로만 응답 타임아웃 10초 · POST 라 재시도 없음. 나머지 /api/concerts/** 는 기본 5초 그대로 (GET 재시도 2회 × 5초)
                 .route("concert-booking", r -> r.path("/api/concerts/*/bookings", "/api/concerts/bookings/*/confirm").and().method(HttpMethod.POST)
@@ -53,12 +57,13 @@ public class RouteConfig {
                         .uri("lb://chatbot-service"));
         // ✏️ 11/04 결정 56B · 57A — 관리자(Studio · 관리자 AI · GPU 무대 작업)는 KT 의 admin.<도메인> 으로 따로 들어갑니다.
         //   /api/studio/** · /api/admin-ai/** · /api/stage-jobs/** 는 여기 없으니 404 입니다 (docs/20 §18-1 · §18-2)
-        // 수집 (docs/22) — 서명 · 재전송 · 봉투 검사는 IngestFilter 가 끝낸 뒤입니다. 경로는 IngestRoute 고정 매핑만
-        // 🔴 하위 서비스가 받은 뒤의 실패(5xx · 지연)는 재시도하지 않습니다 — 수집기가 새 서명으로 다시 보냅니다 (upsert 멱등 · S6)
+        // 서명 경로 (docs/22) — 서명 · 재전송 · 봉투 검사는 IngestFilter 가 끝낸 뒤입니다. 경로는 IngestRoute 고정 매핑만
+        //   (수집 + AI 가 쓰는 회원 데이터 /ingest/members/{userId}/** — SetPath 가 {userId} 를 그대로 옮깁니다)
+        // 🔴 하위 서비스가 받은 뒤의 실패(5xx · 지연)는 재시도하지 않습니다 — 호출한 쪽이 새 서명으로 다시 보냅니다 (upsert 멱등 · S6)
         for (IngestRoute ingest : IngestRoute.values()) {
-            routes.route("ingest-" + ingest.name().toLowerCase(), r -> r.path(ingest.path()).and().method(HttpMethod.POST)
+            routes.route("ingest-" + ingest.name().toLowerCase(), r -> r.path(ingest.path()).and().method(ingest.method())
                     .filters(f -> retryConnect(f.setPath(ingest.internalPath())
-                            .circuitBreaker(c -> c.setName(ingest.circuitBreaker()).setFallbackUri("forward:/fallback/ingest"))))
+                            .circuitBreaker(c -> c.setName(ingest.circuitBreaker()).setFallbackUri("forward:/fallback/ingest")), ingest.method()))
                     .metadata(RESPONSE_TIMEOUT_ATTR, props.ingest().responseTimeout().toMillis())
                     .uri("lb://" + ingest.service()));
         }
@@ -66,12 +71,12 @@ public class RouteConfig {
     }
 
     /**
-     * 수집 — 연결 자체가 안 된 경우(요청이 안 나감)만 1회. 롤링 배포 중 내려가는 Pod 에 걸렸을 때 다른 Pod 로 갑니다.
+     * 서명 경로 — 연결 자체가 안 된 경우(요청이 안 나감)만 1회. 롤링 배포 중 내려가는 Pod 에 걸렸을 때 다른 Pod 로 갑니다.
      * 🔴 Circuit Breaker <b>뒤에</b> 붙여야 안쪽에서 돌아 폴백(503)으로 바뀌기 전의 ConnectException 을 봅니다.
      */
-    private static GatewayFilterSpec retryConnect(GatewayFilterSpec f) {
+    private static GatewayFilterSpec retryConnect(GatewayFilterSpec f, HttpMethod method) {
         return f.retry(c -> c.setRetries(1)
-                .setMethods(HttpMethod.POST)
+                .setMethods(method)
                 .setSeries()
                 .setExceptions(ConnectException.class)
                 .setBackoff(Duration.ofMillis(200), Duration.ofSeconds(1), 2, false));
