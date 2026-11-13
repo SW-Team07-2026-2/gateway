@@ -50,6 +50,7 @@ public class RateLimitFilter implements WebFilter, Ordered {
         if (path.equals("/api/chatbot") || path.startsWith("/api/chatbot/")) return RateLimiterConfig.CHATBOT;
         if (HttpMethod.POST.equals(request.getMethod()) && path.equals("/api/auth/refresh")) return RateLimiterConfig.AUTH_REFRESH;
         if (path.startsWith("/oauth2/authorization/")) return RateLimiterConfig.OAUTH2_AUTHORIZE;
+        if (HttpMethod.POST.equals(request.getMethod()) && path.equals("/api/members/me/metrics")) return RateLimiterConfig.MEMBER_METRICS;
         return null;
     }
 

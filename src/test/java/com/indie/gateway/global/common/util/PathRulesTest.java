@@ -14,6 +14,16 @@ class PathRulesTest {
         assertThat(PathRules.isPublic(HttpMethod.POST, "/api/chatbot/chat")).isFalse();
     }
 
+    /** 장바구니는 Catalog 로 가지만 /api/catalog 와 달리 조회도 로그인이 필요합니다 */
+    @Test
+    void cartIsProtected() {
+        assertThat(PathRules.isKnown("/api/cart")).isTrue();
+        assertThat(PathRules.isKnown("/api/cart/items/7")).isTrue();
+        assertThat(PathRules.isPublic(HttpMethod.GET, "/api/cart")).isFalse();
+        assertThat(PathRules.isPublic(HttpMethod.POST, "/api/cart/items")).isFalse();
+        assertThat(PathRules.isKnown("/api/cartoon")).isFalse();
+    }
+
     /** 옛 경로와 /api/ai/** 는 인증 단계를 건너 라우팅에서 404 */
     @Test
     void oldAndInternalAiPathsAreUnknown() {

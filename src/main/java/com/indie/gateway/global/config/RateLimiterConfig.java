@@ -20,6 +20,7 @@ public class RateLimiterConfig {
     public static final String AUTH_REFRESH = "auth-refresh";
     public static final String OAUTH2_AUTHORIZE = "oauth2-authorize";
     public static final String INGEST = "ingest";
+    public static final String MEMBER_METRICS = "member-metrics";
 
     /**
      * ⑥ 호출 한도 — 저장소는 캐시용 Redis (§5-⑥). 한도는 "분당 N회"라 초당 1토큰 · 버킷 60 으로 두고
@@ -33,6 +34,7 @@ public class RateLimiterConfig {
         limiter.getConfig().put(CHATBOT, perMinute(5));            // /api/chatbot/** — 사용자 ID
         limiter.getConfig().put(AUTH_REFRESH, perMinute(10));      // /api/auth/refresh — 사용자 ID
         limiter.getConfig().put(OAUTH2_AUTHORIZE, perMinute(20));  // /oauth2/authorization/** — 클라이언트 IP
+        limiter.getConfig().put(MEMBER_METRICS, perMinute(30));    // POST /api/members/me/metrics — 사용자 ID (프론트는 모아서 10초에 한 번)
         limiter.getConfig().put(INGEST, new RedisRateLimiter.Config()   // /ingest/** — 수집 키별 초당 10건 (docs/22 G7 · RDS 보호)
                 .setReplenishRate(10).setBurstCapacity(10).setRequestedTokens(1));
         return limiter;
