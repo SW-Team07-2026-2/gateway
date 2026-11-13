@@ -42,7 +42,6 @@ import static org.mockito.Mockito.when;
  * <pre>
  * catalog  인스턴스 2개 중 1개는 닫힌 포트 → 연결 실패 1회 재시도로 다른 인스턴스 → 200
  * catalog  /internal/catalog/albums 가 3초 걸림 → 응답 타임아웃(테스트 1초) → 504 + Retry-After
- * chatbot  인스턴스가 전부 닫힌 포트 → 재시도 뒤 503 + Retry-After
  * member   AI 의 회원 데이터 조회 · 저장 → /internal/members/{userId}/** (경로 변수 · 쿼리 · 본문이 그대로)
  * </pre>
  */
@@ -95,7 +94,6 @@ class IngestRoutingTest {
         String down = "http://127.0.0.1:" + CLOSED_PORT;
         registry.add("spring.cloud.discovery.client.simple.instances.catalog[0].uri", () -> down);
         registry.add("spring.cloud.discovery.client.simple.instances.catalog[1].uri", () -> up);
-        registry.add("spring.cloud.discovery.client.simple.instances.chatbot-service[0].uri", () -> down);
         registry.add("spring.cloud.discovery.client.simple.instances.member[0].uri", () -> up);
     }
 
@@ -137,13 +135,6 @@ class IngestRoutingTest {
                 .expectHeader().valueEquals("Retry-After", "30")
                 .expectBody().jsonPath("$.code").isEqualTo("GATEWAY_TIMEOUT");
         assertThat(Duration.ofNanos(System.nanoTime() - started)).isLessThan(Duration.ofMillis(2500));   // 3초를 기다리지 않음
-    }
-
-    @Test
-    void allPodsDownIs503WithRetryAfter() throws Exception {
-        post("/ingest/ai/documents").expectStatus().isEqualTo(503)
-                .expectHeader().valueEquals("Retry-After", "30")
-                .expectBody().jsonPath("$.code").isEqualTo("SERVICE_UNAVAILABLE");
     }
 
     /** ALB · Cloudflare 경유(외부)면 서명이 맞아도 404 */
@@ -210,7 +201,7 @@ class IngestRoutingTest {
                 .bodyValue(BODY).exchange();
     }
 
-    private static Map<String, String> signHeaders(String path) {
+    static Map<String, String> signHeaders(String path) {
         return signHeaders("POST", path, BODY, "crawler-test", KEY);
     }
 
@@ -230,7 +221,7 @@ class IngestRoutingTest {
         }
     }
 
-    private static int closedPort() {
+    static int closedPort() {
         try (ServerSocket socket = new ServerSocket(0)) {
             return socket.getLocalPort();
         } catch (Exception e) {
