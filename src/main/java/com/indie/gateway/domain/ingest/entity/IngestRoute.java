@@ -22,8 +22,6 @@ public enum IngestRoute {
     CATALOG_ARTISTS(HttpMethod.POST, "/ingest/catalog/artists", "catalog", "catalog", "/internal/catalog/artists", 500, KeySet.COLLECT),
     CATALOG_ALBUMS(HttpMethod.POST, "/ingest/catalog/albums", "catalog", "catalog", "/internal/catalog/albums", 500, KeySet.COLLECT),
     CATALOG_DIFF(HttpMethod.POST, "/ingest/catalog/diff", "catalog", "catalog", "/internal/catalog/ingest/diff", 1000, KeySet.COLLECT),
-    CONCERTS(HttpMethod.POST, "/ingest/concerts", "concert", "concert", "/internal/concerts", 500, KeySet.COLLECT),
-    CONCERTS_DIFF(HttpMethod.POST, "/ingest/concerts/diff", "concert", "concert", "/internal/concerts/ingest/diff", 1000, KeySet.COLLECT),
     AI_DOCUMENTS(HttpMethod.POST, "/ingest/ai/documents", "chatbot-service", "chatbot", "/internal/ai/documents", 500, KeySet.COLLECT),   // I21 · 챗봇 담당
     // 회원 데이터 (member-service docs/v2_member_service_re.md §6.5 · §6.6) — {userId} 는 그대로 Member 로 넘깁니다 (형식 검사는 Member)
     MEMBER_METRICS(HttpMethod.GET, "/ingest/members/{userId}/metrics", "member", "member", "/internal/members/{userId}/metrics", 0, KeySet.MEMBER),

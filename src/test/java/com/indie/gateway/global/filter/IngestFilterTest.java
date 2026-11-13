@@ -292,12 +292,12 @@ class IngestFilterTest {
         assertThat(status(run(signed(PATH, BODY).body(tampered)))).isEqualTo(401);
     }
 
-    /** 서명은 경로도 덮습니다 — artists 서명으로 concerts 에 보낼 수 없음 */
+    /** 서명은 경로도 덮습니다 — artists 서명으로 albums 에 보낼 수 없음 */
     @Test
     void signatureForAnotherPathIs401() throws Exception {
         long ts = now();
         String nonce = UUID.randomUUID().toString();
-        MockServerHttpRequest request = MockServerHttpRequest.post("/ingest/concerts").header("Host", "gateway")
+        MockServerHttpRequest request = MockServerHttpRequest.post("/ingest/catalog/albums").header("Host", "gateway")
                 .contentType(MediaType.APPLICATION_JSON)
                 .header(IngestFilter.KEY_ID, KEY_ID).header(IngestFilter.TIMESTAMP, String.valueOf(ts))
                 .header(IngestFilter.NONCE, nonce).header(IngestFilter.SIGNATURE, sign(KEY, PATH, ts, nonce, BODY))
