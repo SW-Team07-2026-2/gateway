@@ -41,7 +41,7 @@ import static org.mockito.Mockito.when;
  * 수집 경로 라우팅 — 연결 실패 · 응답 지연 (docs/22 §1-4). 가짜 하위 서비스를 띄워 실제 Gateway 라우트로 보냅니다.
  * <pre>
  * catalog  인스턴스 2개 중 1개는 닫힌 포트 → 연결 실패 1회 재시도로 다른 인스턴스 → 200
- * concert  /internal/concerts 가 3초 걸림 → 응답 타임아웃(테스트 1초) → 504 + Retry-After
+ * catalog  /internal/catalog/albums 가 3초 걸림 → 응답 타임아웃(테스트 1초) → 504 + Retry-After
  * chatbot  인스턴스가 전부 닫힌 포트 → 재시도 뒤 503 + Retry-After
  * member   AI 의 회원 데이터 조회 · 저장 → /internal/members/{userId}/** (경로 변수 · 쿼리 · 본문이 그대로)
  * </pre>
@@ -74,7 +74,7 @@ class IngestRoutingTest {
                             .doOnNext(body -> RECEIVED.add(new Received(req.uri(), req.requestHeaders().get("X-Internal-Token"), body)))
                             .then(res.header("Content-Type", "application/json")
                                     .sendString(Mono.just("{\"isSuccess\":true,\"code\":\"OK\"}")).then()))
-                    .post("/internal/concerts", (req, res) -> Mono.delay(Duration.ofSeconds(3))
+                    .post("/internal/catalog/albums", (req, res) -> Mono.delay(Duration.ofSeconds(3))
                             .then(res.sendString(Mono.just("{}")).then()))
                     .get("/internal/members/{userId}/metrics", (req, res) -> {
                         RECEIVED.add(new Received(req.uri(), req.requestHeaders().get("X-Internal-Token"), ""));
@@ -95,7 +95,6 @@ class IngestRoutingTest {
         String down = "http://127.0.0.1:" + CLOSED_PORT;
         registry.add("spring.cloud.discovery.client.simple.instances.catalog[0].uri", () -> down);
         registry.add("spring.cloud.discovery.client.simple.instances.catalog[1].uri", () -> up);
-        registry.add("spring.cloud.discovery.client.simple.instances.concert[0].uri", () -> up);
         registry.add("spring.cloud.discovery.client.simple.instances.chatbot-service[0].uri", () -> down);
         registry.add("spring.cloud.discovery.client.simple.instances.member[0].uri", () -> up);
     }
@@ -134,7 +133,7 @@ class IngestRoutingTest {
     @Test
     void slowDownstreamIs504WithRetryAfter() throws Exception {
         long started = System.nanoTime();
-        post("/ingest/concerts").expectStatus().isEqualTo(504)
+        post("/ingest/catalog/albums").expectStatus().isEqualTo(504)
                 .expectHeader().valueEquals("Retry-After", "30")
                 .expectBody().jsonPath("$.code").isEqualTo("GATEWAY_TIMEOUT");
         assertThat(Duration.ofNanos(System.nanoTime() - started)).isLessThan(Duration.ofMillis(2500));   // 3초를 기다리지 않음
