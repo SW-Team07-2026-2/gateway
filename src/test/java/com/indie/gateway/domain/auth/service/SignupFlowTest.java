@@ -49,12 +49,12 @@ class SignupFlowTest {
         assertThat(crossSite.signup("signup").getPath()).isEqualTo("/api/auth/signup");
     }
 
-    /** 아직 회원이 아니라 AT 가 없는 경로 — 가입 완료 · 밴드 고르기 · 11/05 약관 */
+    /** 아직 회원이 아니라 AT 가 없는 경로 — 가입 완료 · 11/05 약관. 챗봇은 전부 로그인이 필요합니다 (11/13 — 챗봇에 없는 밴드 고르기 공개 경로 삭제) */
     @Test
     void signupPathsArePublic() {
         assertThat(PathRules.isPublic(HttpMethod.POST, "/api/auth/signup")).isTrue();
         assertThat(PathRules.isPublic(HttpMethod.GET, "/api/auth/signup")).isTrue();   // 11/08 가입 화면 진입 확인
-        assertThat(PathRules.isPublic(HttpMethod.GET, "/api/chatbot/artists/similar")).isTrue();
+        assertThat(PathRules.isPublic(HttpMethod.GET, "/api/chatbot/artists/similar")).isFalse();
         assertThat(PathRules.isPublic(HttpMethod.POST, "/api/chatbot")).isFalse();
         assertThat(PathRules.isPublic(HttpMethod.GET, "/api/members/terms")).isTrue();
         assertThat(PathRules.isPublic(HttpMethod.GET, "/api/members/me/agreements")).isFalse();   // MY 는 로그인
