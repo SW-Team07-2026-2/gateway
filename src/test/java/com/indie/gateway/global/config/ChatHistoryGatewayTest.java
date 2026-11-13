@@ -13,6 +13,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentMatchers;
+import org.springframework.cloud.gateway.filter.factory.DedupeResponseHeaderGatewayFilterFactory;
 import org.springframework.cloud.gateway.filter.factory.RetryGatewayFilterFactory;
 import org.springframework.cloud.gateway.filter.factory.SetPathGatewayFilterFactory;
 import org.springframework.cloud.gateway.filter.factory.SpringCloudCircuitBreakerFilterFactory;
@@ -57,6 +58,7 @@ class ChatHistoryGatewayTest {
             beans.registerSingleton("method", new MethodRoutePredicateFactory());
             beans.registerSingleton("retry", new RetryGatewayFilterFactory());
             beans.registerSingleton("setPath", new SetPathGatewayFilterFactory());
+            beans.registerSingleton("dedupeResponseHeader", new DedupeResponseHeaderGatewayFilterFactory());
             var circuitBreaker = mock(SpringCloudCircuitBreakerFilterFactory.class);
             when(circuitBreaker.apply(anyString(), ArgumentMatchers.<Consumer<SpringCloudCircuitBreakerFilterFactory.Config>>any()))
                     .thenReturn((exchange, chain) -> chain.filter(exchange));

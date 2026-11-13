@@ -51,8 +51,11 @@ public class RouteConfig {
                         .filters(f -> f.circuitBreaker(c -> c.setName("payment")))
                         .uri("lb://payment"))
                 // 챗봇 — 🔴 재시도 0 · 타임아웃 30s · 호출 한도 분당 5 (RateLimitFilter)
+                //   챗봇(FastAPI)도 CORS 헤더를 붙여 CorsFilter 의 값과 겹칩니다("true, true" → 브라우저가 막음) — 하나만 남깁니다.
+                //   application.yml 의 default-filters 는 여기처럼 Java 로 만든 라우트에는 적용되지 않습니다
                 .route("chatbot", r -> r.path("/api/chatbot", "/api/chatbot/**")
-                        .filters(f -> f.circuitBreaker(c -> c.setName("chatbot").setFallbackUri("forward:/fallback/chatbot")))
+                        .filters(f -> f.dedupeResponseHeader("Access-Control-Allow-Origin Access-Control-Allow-Credentials", "RETAIN_UNIQUE")
+                                .circuitBreaker(c -> c.setName("chatbot").setFallbackUri("forward:/fallback/chatbot")))
                         .metadata(RESPONSE_TIMEOUT_ATTR, 30_000)
                         .uri("lb://chatbot-service"));
         // ✏️ 11/04 결정 56B · 57A — 관리자(Studio · 관리자 AI · GPU 무대 작업)는 KT 의 admin.<도메인> 으로 따로 들어갑니다.
