@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-# 빌드: docker buildx build --platform linux/arm64 -t <ecr>/indig-gateway:$(git rev-parse --short HEAD) --push .
+# 빌드: docker buildx build --platform linux/amd64,linux/arm64 -t <ecr>/indig-gateway:$(git rev-parse --short HEAD) --push .
 #       태그는 커밋 SHA — latest 는 ArgoCD 가 변경을 감지하지 못합니다
 FROM --platform=$BUILDPLATFORM gradle:8.10-jdk21 AS build
 WORKDIR /app
@@ -9,7 +9,7 @@ RUN gradle dependencies --no-daemon || true          # 의존성 레이어 캐�
 COPY src ./src
 RUN gradle bootJar --no-daemon -x test
 
-# 🔴 노드가 t4g (Graviton) — amd64 이미지는 exec format error 로 CrashLoop
+# 🔴 amd64 · arm64 둘 다 올립니다 (AWS 노드는 t4g · 온프레미스는 Intel PC) — 노드와 다른 아키텍처만 있으면 exec format error 로 CrashLoop
 FROM eclipse-temurin:21-jre-alpine
 RUN addgroup -S app && adduser -S app -G app
 WORKDIR /app
