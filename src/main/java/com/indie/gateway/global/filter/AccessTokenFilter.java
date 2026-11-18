@@ -25,6 +25,7 @@ import reactor.core.publisher.Mono;
 public class AccessTokenFilter implements WebFilter, Ordered {
 
     private static final String PASS = "";
+    private static final String AUTH_ME = "/api/auth/me";
 
     private final AccessTokenVerifier verifier;
     private final MeterRegistry meterRegistry;
@@ -45,7 +46,10 @@ public class AccessTokenFilter implements WebFilter, Ordered {
         HttpCookie cookie = request.getCookies().getFirst(CookieFactory.AT);
         if (cookie == null || cookie.getValue().isBlank()) {
             if (publicPath) return chain.filter(exchange);
-            meterRegistry.counter("gateway.auth.failure", "reason", "missing").increment();
+            // 비로그인 화면의 로그인 확인 (G3) 은 401 이 정상 응답이라 실패로 세지 않음
+            if (!path.equals(AUTH_ME)) {
+                meterRegistry.counter("gateway.auth.failure", "reason", "missing").increment();
+            }
             return reject(exchange, "TOKEN_INVALID");
         }
 
