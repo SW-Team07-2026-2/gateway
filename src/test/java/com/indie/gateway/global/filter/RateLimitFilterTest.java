@@ -7,6 +7,9 @@ import com.indie.gateway.global.config.RateLimiterConfig;
 import org.junit.jupiter.api.Test;
 import org.springframework.cloud.gateway.filter.ratelimit.RateLimiter;
 import org.springframework.cloud.gateway.filter.ratelimit.RedisRateLimiter;
+import org.springframework.cloud.gateway.support.ConfigurationService;
+import org.springframework.data.redis.core.ReactiveStringRedisTemplate;
+import org.springframework.data.redis.core.script.RedisScript;
 import org.springframework.mock.http.server.reactive.MockServerHttpRequest;
 import org.springframework.mock.web.server.MockServerWebExchange;
 import reactor.core.publisher.Mono;
@@ -21,10 +24,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-/** ⑥ 호출 한도 — 메트릭 수집 (member docs/v2_member_service_re.md §6.5 · 회원당 분당 30회) */
+/** ⑥ 호출 한도 — 메트릭 수집 (member docs/v2_member_service_re.md §6.5 · 회원당 분당 30회) · 11/23 검색 (회원당 분당 500회) */
 class RateLimitFilterTest {
 
     private static final String METRICS = "/api/members/me/metrics";
@@ -80,5 +84,56 @@ class RateLimitFilterTest {
 
         assertThat(passed).isTrue();
         verify(limiter, never()).isAllowed(anyString(), anyString());
+    }
+
+    /** 11/23 검색 — 검색 · 팔로우 탭 4종과 검색어를 붙인 목록은 회원당 한 묶음 */
+    @Test
+    void searchIsLimitedPerUser() {
+        allow(true);
+
+        run(MockServerHttpRequest.get("/api/catalog/search/goods").queryParam("q", "혁오").build());
+        run(MockServerHttpRequest.get("/api/catalog/search/artists").build());
+        run(MockServerHttpRequest.get("/api/catalog/following/physical-albums").build());
+        run(MockServerHttpRequest.get("/api/concerts/search").queryParam("genre", "EMO").build());
+        run(MockServerHttpRequest.get("/api/concerts/following").build());
+        run(MockServerHttpRequest.get("/api/catalog/search").queryParam("q", "혁").build());
+        run(MockServerHttpRequest.get("/api/catalog/artists").queryParam("q", "혁").build());   // 가입 화면 아티스트 검색
+
+        verify(limiter, times(7)).isAllowed(RateLimiterConfig.SEARCH, RateLimiterConfig.SEARCH + ":user:42");
+    }
+
+    /** 비로그인 검색은 클라이언트 IP(CF-Connecting-IP) 단위 */
+    @Test
+    void anonymousSearchIsLimitedPerIp() {
+        allow(true);
+        MockServerWebExchange exchange = MockServerWebExchange.from(MockServerHttpRequest.get("/api/concerts/search")
+                .header("CF-Connecting-IP", "203.0.113.7").build());
+
+        filter.filter(exchange, e -> Mono.empty()).block(Duration.ofSeconds(5));
+
+        verify(limiter).isAllowed(RateLimiterConfig.SEARCH, RateLimiterConfig.SEARCH + ":ip:203.0.113.7");
+    }
+
+    /** 검색어 없는 목록 · 상세 · 검색 경로의 다른 메서드는 대상이 아닙니다 */
+    @Test
+    void browsingIsNotLimitedAsSearch() {
+        run(MockServerHttpRequest.get("/api/catalog/artists").build());
+        run(MockServerHttpRequest.get("/api/catalog/artists/7").build());
+        run(MockServerHttpRequest.get("/api/concerts/12").build());
+        run(MockServerHttpRequest.get("/api/concerts/12/queue/status").build());
+        run(MockServerHttpRequest.post("/api/concerts/12/bookings").build());
+
+        verify(limiter, never()).isAllowed(anyString(), anyString());
+    }
+
+    /** 분당 500회(타자 500타/분 · 1타 = 1요청) · 한 번에 30회 */
+    @Test
+    void searchLimitIs500PerMinuteWithBurst30() {
+        RedisRateLimiter real = new RateLimiterConfig().redisRateLimiter(mock(ReactiveStringRedisTemplate.class),
+                mock(RedisScript.class), mock(ConfigurationService.class));
+        RedisRateLimiter.Config search = real.getConfig().get(RateLimiterConfig.SEARCH);
+
+        assertThat(search.getReplenishRate() * 60 / search.getRequestedTokens()).isEqualTo(500);
+        assertThat(search.getBurstCapacity() / search.getRequestedTokens()).isEqualTo(30);
     }
 }
