@@ -21,6 +21,7 @@ public class RateLimiterConfig {
     public static final String OAUTH2_AUTHORIZE = "oauth2-authorize";
     public static final String INGEST = "ingest";
     public static final String MEMBER_METRICS = "member-metrics";
+    public static final String SEARCH = "search";
 
     /**
      * ⑥ 호출 한도 — 저장소는 캐시용 Redis (§5-⑥). 한도는 "분당 N회"라 초당 1토큰 · 버킷 60 으로 두고
@@ -37,6 +38,10 @@ public class RateLimiterConfig {
         limiter.getConfig().put(MEMBER_METRICS, perMinute(30));    // POST /api/members/me/metrics — 사용자 ID (프론트는 모아서 10초에 한 번)
         limiter.getConfig().put(INGEST, new RedisRateLimiter.Config()   // /ingest/** — 수집 키별 초당 10건 (docs/22 G7 · RDS 보호)
                 .setReplenishRate(10).setBurstCapacity(10).setRequestedTokens(1));
+        // 검색 — 회원(비로그인은 IP)당 분당 500회 (11/23 결정): 사람이 칠 수 있는 타자 500타/분을 1타 = 1요청으로 본 값.
+        //   토큰 초당 25 · 요청당 3 = 초당 8.3회. 버킷 90 = 한 번에 30회 — 붙여넣기 · 키를 누르고 있기(초당 약 30회) · 스크롤이 겹쳐도 1초는 받습니다
+        limiter.getConfig().put(SEARCH, new RedisRateLimiter.Config()
+                .setReplenishRate(25).setBurstCapacity(90).setRequestedTokens(3));
         return limiter;
     }
 
