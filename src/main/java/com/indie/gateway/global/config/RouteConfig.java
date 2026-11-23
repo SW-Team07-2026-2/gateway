@@ -7,12 +7,9 @@ import org.springframework.cloud.gateway.route.builder.RouteLocatorBuilder;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
-import org.springframework.http.HttpStatus;
 
-import java.io.IOException;
 import java.net.ConnectException;
 import java.time.Duration;
-import java.util.concurrent.TimeoutException;
 
 import static org.springframework.cloud.gateway.support.RouteMetadataUtils.RESPONSE_TIMEOUT_ATTR;
 
@@ -20,42 +17,55 @@ import static org.springframework.cloud.gateway.support.RouteMetadataUtils.RESPO
  * 라우트 (§6). 여기 없는 경로는 전부 404 — /internal/** · /api/ai/** 포함 (기본 거부).
  * /api/auth/** 는 Gateway 자체 컨트롤러입니다. 🔴 Member 로 라우팅하지 않습니다 (쿠키 정책이 두 곳에 생김).
  * lb://<이름> 의 이름은 k8s Service 이름과 같아야 합니다.
+ * ✏️ 11/23 서킷 — 하위 서비스의 500 도 실패로 셉니다. 재시도는 서킷 안쪽 · 연결 실패만 (retryConnect).
  */
 @Configuration
 public class RouteConfig {
+
+    /**
+     * 서킷이 실패로 세는 하위 응답 — 처리 못 한 오류(INTERNAL_ERROR)만. 폴백은 같은 500 을 돌려줍니다 (FallbackController).
+     * 🔴 502 · 503 은 넣지 않습니다 — 서비스가 일부러 내는 응답(PAYMENT_PENDING · QUEUE_UNAVAILABLE · PG_PROCESSING …)이라 그대로 통과해야 합니다.
+     */
+    static final String UNHANDLED_ERROR = "500";
 
     @Bean
     public RouteLocator routes(RouteLocatorBuilder builder, GatewayProperties props) {
         RouteLocatorBuilder.Builder routes = builder.routes()
                 .route("member", r -> r.path("/api/members", "/api/members/**")
-                        .filters(f -> retryGet(f).circuitBreaker(c -> c.setName("member").setFallbackUri("forward:/fallback/member")))
+                        .filters(f -> retryConnect(f.circuitBreaker(c -> c.setName("member").setFallbackUri("forward:/fallback/member")
+                                .addStatusCode(UNHANDLED_ERROR)), HttpMethod.GET))
                         .uri("lb://member"))
                 .route("catalog", r -> r.path("/api/catalog", "/api/catalog/**")
-                        .filters(f -> retryGet(f).circuitBreaker(c -> c.setName("catalog").setFallbackUri("forward:/fallback/catalog")))
+                        .filters(f -> retryConnect(f.circuitBreaker(c -> c.setName("catalog").setFallbackUri("forward:/fallback/catalog")
+                                .addStatusCode(UNHANDLED_ERROR)), HttpMethod.GET))
                         .uri("lb://catalog"))
                 // 장바구니 — Member 위시리스트를 없애고 Catalog 의 cart_item 으로 옮겼습니다. 공개 경로가 아니라 로그인 필수 (PathRules)
                 .route("cart", r -> r.path("/api/cart", "/api/cart/**")
-                        .filters(f -> retryGet(f).circuitBreaker(c -> c.setName("catalog").setFallbackUri("forward:/fallback/catalog")))
+                        .filters(f -> retryConnect(f.circuitBreaker(c -> c.setName("catalog").setFallbackUri("forward:/fallback/catalog")
+                                .addStatusCode(UNHANDLED_ERROR)), HttpMethod.GET))
                         .uri("lb://catalog"))
                 // ✏️ 11/04 75-5 — 좌석 선점(N10) · 결제 승인(N16)은 Concert 가 Payment 를 두 번 부를 수 있어 최악 8초 (docs/30 R8).
-                //   이 두 경로만 응답 타임아웃 10초 · POST 라 재시도 없음. 나머지 /api/concerts/** 는 기본 5초 그대로 (GET 재시도 2회 × 5초)
+                //   이 두 경로만 응답 타임아웃 10초 · POST 라 재시도 없음. 나머지 /api/concerts/** 는 기본 5초 그대로
+                //   ✏️ 11/23 서킷도 따로 (concert-booking · TimeLimiter 11초) — 결제가 느려져도 공연 조회 서킷은 열리지 않고, 조회는 5초에 끊깁니다
                 .route("concert-booking", r -> r.path("/api/concerts/*/bookings", "/api/concerts/bookings/*/confirm").and().method(HttpMethod.POST)
-                        .filters(f -> f.circuitBreaker(c -> c.setName("concert").setFallbackUri("forward:/fallback/concert")))
+                        .filters(f -> f.circuitBreaker(c -> c.setName("concert-booking").setFallbackUri("forward:/fallback/concert")
+                                .addStatusCode(UNHANDLED_ERROR)))
                         .metadata(RESPONSE_TIMEOUT_ATTR, 10_000)
                         .uri("lb://concert"))
                 .route("concert", r -> r.path("/api/concerts", "/api/concerts/**")
-                        .filters(f -> retryGet(f).circuitBreaker(c -> c.setName("concert").setFallbackUri("forward:/fallback/concert")))
+                        .filters(f -> retryConnect(f.circuitBreaker(c -> c.setName("concert").setFallbackUri("forward:/fallback/concert")
+                                .addStatusCode(UNHANDLED_ERROR)), HttpMethod.GET))
                         .uri("lb://concert"))
                 // 결제 — 🔴 재시도 0 · 폴백 없음. 조용히 실패하는 게 중복 승인보다 낫습니다
                 .route("payment", r -> r.path("/api/payments", "/api/payments/**")
-                        .filters(f -> f.circuitBreaker(c -> c.setName("payment")))
+                        .filters(f -> f.circuitBreaker(c -> c.setName("payment").addStatusCode(UNHANDLED_ERROR)))   // 500 은 GatewayErrorHandler 가 같은 500 으로
                         .uri("lb://payment"))
                 // 챗봇 — 🔴 재시도 0 · 타임아웃 30s · 호출 한도 분당 5 (RateLimitFilter)
                 //   챗봇(FastAPI)도 CORS 헤더를 붙여 CorsFilter 의 값과 겹칩니다("true, true" → 브라우저가 막음) — 하나만 남깁니다.
                 //   application.yml 의 default-filters 는 여기처럼 Java 로 만든 라우트에는 적용되지 않습니다
                 .route("chatbot", r -> r.path("/api/chatbot", "/api/chatbot/**")
                         .filters(f -> f.dedupeResponseHeader("Access-Control-Allow-Origin Access-Control-Allow-Credentials", "RETAIN_UNIQUE")
-                                .circuitBreaker(c -> c.setName("chatbot").setFallbackUri("forward:/fallback/chatbot")))
+                                .circuitBreaker(c -> c.setName("chatbot").setFallbackUri("forward:/fallback/chatbot").addStatusCode(UNHANDLED_ERROR)))
                         .metadata(RESPONSE_TIMEOUT_ATTR, 30_000)
                         .uri("lb://chatbot-service"));
         // ✏️ 11/04 결정 56B · 57A — 관리자(Studio · 관리자 AI · GPU 무대 작업)는 KT 의 admin.<도메인> 으로 따로 들어갑니다.
@@ -74,8 +84,10 @@ public class RouteConfig {
     }
 
     /**
-     * 서명 경로 — 연결 자체가 안 된 경우(요청이 안 나감)만 1회. 롤링 배포 중 내려가는 Pod 에 걸렸을 때 다른 Pod 로 갑니다.
+     * 서명 경로 · 사용자 GET — 연결 자체가 안 된 경우(요청이 안 나감)만 1회. 롤링 배포 중 내려가는 Pod 에 걸렸을 때 다른 Pod 로 갑니다.
      * 🔴 Circuit Breaker <b>뒤에</b> 붙여야 안쪽에서 돌아 폴백(503)으로 바뀌기 전의 ConnectException 을 봅니다.
+     * ✏️ 11/23 사용자 GET 도 이것으로 — 전에는 서킷 바깥에서 5xx · 타임아웃까지 2회 재시도해 느린 서비스에 요청이 3배로 갔고, 서킷이 열린 뒤의 폴백 503 도 다시 시도했습니다.
+     *    🔴 POST 재시도는 중복 주문 · 결제를 만듭니다 — 사용자 경로는 GET 만.
      */
     private static GatewayFilterSpec retryConnect(GatewayFilterSpec f, HttpMethod method) {
         return f.retry(c -> c.setRetries(1)
@@ -83,13 +95,5 @@ public class RouteConfig {
                 .setSeries()
                 .setExceptions(ConnectException.class)
                 .setBackoff(Duration.ofMillis(200), Duration.ofSeconds(1), 2, false));
-    }
-
-    /** GET 만 · 5xx · IOException · TimeoutException · 최대 2회. 🔴 POST 재시도는 중복 주문 · 결제를 만듭니다 */
-    private static GatewayFilterSpec retryGet(GatewayFilterSpec f) {
-        return f.retry(c -> c.setRetries(2)
-                .setMethods(HttpMethod.GET)
-                .setSeries(HttpStatus.Series.SERVER_ERROR)
-                .setExceptions(IOException.class, TimeoutException.class));
     }
 }
