@@ -10,6 +10,8 @@ spring:
         enabled: true
         all-namespaces: false
       reload.enabled: false
+    loadbalancer:
+      cache.ttl: 5s                                     # ✏️ 11/23 인스턴스 목록 캐시 (기본 35s) — preStop 15s 안에 내려가는 Pod 를 목록에서 뺍니다
     gateway:
       httpclient:
         connect-timeout: 2000
@@ -122,6 +124,7 @@ resilience4j:
       member:    { base-config: default }
       catalog:   { base-config: default }
       concert:   { base-config: default }
+      concert-booking: { base-config: default }         # ✏️ 11/23 좌석 선점 · 결제 승인 POST 만 — 결제가 느려도 공연 조회(concert) 서킷은 열리지 않게
       payment:   { base-config: default, failure-rate-threshold: 70 }   # 결제는 더 참는다
       chatbot:   { base-config: default, sliding-window-size: 10 }
       ingest-catalog: { base-config: default }          # 수집 전용 — 큰 배치가 느려도 사용자 경로의 catalog CB 는 열리지 않게
@@ -130,7 +133,7 @@ resilience4j:
     configs.default.timeout-duration: 5s
     instances:
       chatbot:   { timeout-duration: 30s }
-      concert:   { timeout-duration: 11s }                # 75-5 — 예매 경로 응답 타임아웃(10s)이 먼저 끊게. 다른 concert 경로는 5s 응답 타임아웃이 먼저 끊음
+      concert-booking: { timeout-duration: 11s }        # 75-5 — 예매 경로 응답 타임아웃(10s)이 먼저 끊게 · ✏️ 11/23 concert 에서 옮김 (concert 는 기본 5s)
       ingest-catalog: { timeout-duration: 35s }         # 응답 타임아웃(30s)이 먼저 끊어 504 로 구분되게
       ingest-member:  { timeout-duration: 35s }
 

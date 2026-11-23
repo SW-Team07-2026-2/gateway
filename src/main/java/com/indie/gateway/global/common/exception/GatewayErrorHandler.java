@@ -7,6 +7,7 @@ import org.springframework.boot.web.reactive.error.ErrorWebExceptionHandler;
 import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.stereotype.Component;
+import org.springframework.web.client.HttpStatusCodeException;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
@@ -29,8 +30,11 @@ public class GatewayErrorHandler implements ErrorWebExceptionHandler {
             return Mono.error(ex);
         }
         HttpStatusCode status = ex instanceof ResponseStatusException rse ? rse.getStatusCode()
+                : ex instanceof HttpStatusCodeException downstream ? downstream.getStatusCode()   // ✏️ 11/23 서킷이 실패로 센 하위 500 (폴백 없는 payment)
                 : isConnectFailure(ex) ? HttpStatusCode.valueOf(503) : HttpStatusCode.valueOf(500);
-        if (status.value() == 500) {
+        if (ex instanceof HttpStatusCodeException) {
+            log.warn("downstream_error status={}", status.value());   // 하위 서비스가 낸 오류 — 스택은 그 서비스 로그에
+        } else if (status.value() == 500) {
             log.error("gateway_error status=500", ex);          // 예상 못 한 오류 — 스택 필요
         } else if (status.is5xxServerError()) {
             log.error("gateway_error status={} error={}", status.value(), ex.toString());
