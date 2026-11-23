@@ -53,13 +53,28 @@ class ConcertBookingRouteTest {
         assertDefault(HttpMethod.GET, "/api/concerts/bookings/7/entry-qr");
     }
 
-    /** TimeLimiter concert 11초 — 기본 5초였다면 응답 타임아웃(10초)보다 먼저 끊어 폴백이 됩니다 */
+    /** TimeLimiter concert-booking 11초 — 기본 5초였다면 응답 타임아웃(10초)보다 먼저 끊어 폴백이 됩니다 */
     @Test
-    void concertTimeLimiterDoesNotCutAt5s() {
-        String result = circuitBreakers.create("concert")
-                .run(Mono.delay(Duration.ofSeconds(6)).thenReturn("ok"), t -> Mono.just("fallback"))
+    void bookingTimeLimiterDoesNotCutAt5s() {
+        assertThat(runFor("concert-booking", Duration.ofSeconds(6))).isEqualTo("ok");
+    }
+
+    /** ✏️ 11/23 서킷을 나눈 뒤 공연 조회(concert)는 기본 5초 — 예매 때문에 늘어나 있던 11초가 아님 */
+    @Test
+    void concertTimeLimiterIsDefault5s() {
+        assertThat(runFor("concert", Duration.ofSeconds(6))).isEqualTo("fallback");
+    }
+
+    @Test
+    void bookingRouteUsesItsOwnCircuit() {
+        Route route = routeOf(HttpMethod.POST, "/api/concerts/7/bookings");
+        assertThat(route.getFilters().toString()).contains("concert-booking");
+    }
+
+    private String runFor(String circuit, Duration delay) {
+        return circuitBreakers.create(circuit)
+                .run(Mono.delay(delay).thenReturn("ok"), t -> Mono.just("fallback"))
                 .block(Duration.ofSeconds(15));
-        assertThat(result).isEqualTo("ok");
     }
 
     private void assertDefault(HttpMethod method, String path) {

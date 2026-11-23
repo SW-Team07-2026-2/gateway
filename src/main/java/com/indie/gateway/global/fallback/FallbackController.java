@@ -9,6 +9,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.client.HttpStatusCodeException;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
@@ -33,6 +34,12 @@ public class FallbackController {
         }
         if ("ingest".equals(service)) {
             return ingest(exchange);
+        }
+        // ✏️ 11/23 서킷이 실패로 센 하위 500 (RouteConfig.UNHANDLED_ERROR) — 서비스가 낸 것과 같은 500 INTERNAL_ERROR 로 돌려줍니다 (503 아님)
+        if (exchange.getAttribute(ServerWebExchangeUtils.CIRCUITBREAKER_EXECUTION_EXCEPTION_ATTR) instanceof HttpStatusCodeException) {
+            CommonErrorCode code = CommonErrorCode.INTERNAL_ERROR;
+            return ErrorResponses.write(exchange, code.getStatus(),
+                    ErrorResponses.failure(exchange, code, code.getMessage(), Map.of("service", service)));
         }
         String message = "chatbot".equals(service) ? "잠시 후 다시 시도해주세요" : "일시적으로 이용할 수 없습니다";
         return ErrorResponses.write(exchange, HttpStatus.SERVICE_UNAVAILABLE,
