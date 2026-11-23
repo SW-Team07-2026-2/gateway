@@ -33,60 +33,65 @@ class OAuth2RedirectTest {
 
     private static final String API = "https://api.example.com";
     private static final String CALLBACK = API + "/oauth2/code/kakao";
+    /** frontend 파라미터 → 돌아갈 주소 ("" 는 파라미터 없음 = 운영 설정값) */
+    private static final Map<String, String> FRONTENDS = Map.of(
+            "", "https://example.com",
+            "local", "http://localhost:5173",
+            "vercel", "https://sw-academy-workspace-front.vercel.app");
     private final CookieFactory cookies = new CookieFactory(TestProps.create("/nonexistent"));
     private final OAuth2AuthenticationToken authentication = new OAuth2AuthenticationToken(
             new DefaultOAuth2User(List.of(new SimpleGrantedAuthority("ROLE_USER")), Map.of("id", 42L), "id"),
             List.of(new SimpleGrantedAuthority("ROLE_USER")), "kakao");
 
     @ParameterizedTest
-    @ValueSource(booleans = {false, true})
-    void newUserReturnsToSelectedSignup(boolean local) {
-        MockServerWebExchange callback = callback(local ? "?frontend=local" : "", "?code=code&state=state");
+    @ValueSource(strings = {"", "local", "vercel"})
+    void newUserReturnsToSelectedSignup(String frontend) {
+        MockServerWebExchange callback = callback(start(frontend), "?code=code&state=state");
 
         handler(Mono.just(new IssueResponse(null, null, null, List.of(), null, true, "signup-token")))
                 .onAuthenticationSuccess(webFilter(callback), authentication).block();
 
-        assertLocation(callback, (local ? "http://localhost:5173" : "https://example.com") + "/welcome");
+        assertLocation(callback, FRONTENDS.get(frontend) + "/welcome");
         assertThat(callback.getResponse().getCookies().getFirst(CookieFactory.SIGNUP).getValue()).isEqualTo("signup-token");
         assertThat(callback.getResponse().getCookies().getFirst(CookieFactory.OAUTH_REQUEST).getMaxAge()).isZero();
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {false, true})
-    void existingUserReturnsHomeWithAuthCookies(boolean local) {
-        MockServerWebExchange callback = callback(local ? "?frontend=local" : "", "?code=code&state=state");
+    @ValueSource(strings = {"", "local", "vercel"})
+    void existingUserReturnsHomeWithAuthCookies(String frontend) {
+        MockServerWebExchange callback = callback(start(frontend), "?code=code&state=state");
 
         handler(Mono.just(new IssueResponse(1L, "at", "rt", List.of("USER"), "닉네임", false, null)))
                 .onAuthenticationSuccess(webFilter(callback), authentication).block();
 
-        assertLocation(callback, (local ? "http://localhost:5173" : "https://example.com") + "/");
+        assertLocation(callback, FRONTENDS.get(frontend) + "/");
         assertThat(callback.getResponse().getCookies().getFirst(CookieFactory.AT).getValue()).isEqualTo("at");
         assertThat(callback.getResponse().getCookies().getFirst(CookieFactory.RT).getValue()).isEqualTo("rt");
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {false, true})
-    void cancelledLoginReturnsToSelectedLogin(boolean local) {
-        MockServerWebExchange callback = callback(local ? "?frontend=local" : "", "?error=access_denied&state=state");
+    @ValueSource(strings = {"", "local", "vercel"})
+    void cancelledLoginReturnsToSelectedLogin(String frontend) {
+        MockServerWebExchange callback = callback(start(frontend), "?error=access_denied&state=state");
 
         handler(Mono.empty()).onAuthenticationFailure(webFilter(callback), new OAuth2AuthenticationException("access_denied")).block();
 
-        assertLocation(callback, (local ? "http://localhost:5173" : "https://example.com") + "/login?error=oauth_failed");
+        assertLocation(callback, FRONTENDS.get(frontend) + "/login?error=oauth_failed");
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {false, true})
-    void memberFailureReturnsToSelectedLogin(boolean local) {
-        MockServerWebExchange callback = callback(local ? "?frontend=local" : "", "?code=code&state=state");
+    @ValueSource(strings = {"", "local", "vercel"})
+    void memberFailureReturnsToSelectedLogin(String frontend) {
+        MockServerWebExchange callback = callback(start(frontend), "?code=code&state=state");
 
         handler(Mono.error(new IllegalStateException("member unavailable")))
                 .onAuthenticationSuccess(webFilter(callback), authentication).block();
 
-        assertLocation(callback, (local ? "http://localhost:5173" : "https://example.com") + "/login?error=signup_failed");
+        assertLocation(callback, FRONTENDS.get(frontend) + "/login?error=signup_failed");
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"https://evil.example", "//evil.example", "http://localhost:5174", "local.evil.example"})
+    @ValueSource(strings = {"https://evil.example", "//evil.example", "http://localhost:5174", "local.evil.example", "Vercel", "vercel.evil.example"})
     void arbitraryDestinationsCannotOverrideProduction(String frontend) {
         MockServerWebExchange callback = callback("?frontend=" + frontend, "?code=code&state=state");
 
@@ -123,6 +128,10 @@ class OAuth2RedirectTest {
         handler(Mono.empty()).onAuthenticationFailure(webFilter(callback), new OAuth2AuthenticationException("authorization_request_not_found")).block();
 
         assertLocation(callback, "https://example.com/login?error=oauth_failed");
+    }
+
+    private static String start(String frontend) {
+        return frontend.isEmpty() ? "" : "?frontend=" + frontend;
     }
 
     /** 콜백이 다른 Pod 로 와도 동작하도록 새 인스턴스에서 쿠키만으로 복원합니다. */

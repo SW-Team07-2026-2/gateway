@@ -22,7 +22,14 @@ import java.util.Map;
 @Component
 public class CookieAuthorizationRequestRepository implements ServerAuthorizationRequestRepository<OAuth2AuthorizationRequest> {
 
-    public static final String LOCAL_FRONTEND = CookieAuthorizationRequestRepository.class.getName() + ".localFrontend";
+    /** 콜백 exchange 속성 — 로그인 결과를 돌려보낼 프론트 주소 (없으면 운영 설정값) */
+    public static final String FRONTEND_BASE = CookieAuthorizationRequestRepository.class.getName() + ".frontendBase";
+
+    /** 인가 요청 쿠키에는 이름만 담고, 주소는 이 고정 목록에서 고릅니다 — 쿠키를 고쳐도 다른 곳으로 보낼 수 없게 */
+    private static final String FRONTEND = "frontend";
+    private static final Map<String, String> FRONTENDS = Map.of(
+            "local", "http://localhost:5173",
+            "vercel", "https://sw-academy-workspace-front.vercel.app");
 
     private final CookieFactory cookieFactory;
     private final ObjectMapper objectMapper;
@@ -49,9 +56,13 @@ public class CookieAuthorizationRequestRepository implements ServerAuthorization
         }
         return Mono.fromRunnable(() -> {
             // 로그인 시작 때 선택한 프론트를 OAuth 요청과 함께 보관합니다. 카카오 콜백 URI 는 그대로입니다.
+            String frontend = exchange.getRequest().getQueryParams().getFirst(FRONTEND);
             OAuth2AuthorizationRequest stored = OAuth2AuthorizationRequest.from(request)
-                    .attributes(attrs -> attrs.put(LOCAL_FRONTEND,
-                            "local".equals(exchange.getRequest().getQueryParams().getFirst("frontend"))))
+                    .attributes(attrs -> {
+                        if (frontend != null && FRONTENDS.containsKey(frontend)) {
+                            attrs.put(FRONTEND, frontend);
+                        }
+                    })
                     .build();
             exchange.getResponse().addCookie(cookieFactory.oauthRequest(encode(stored)));
         });
@@ -63,8 +74,11 @@ public class CookieAuthorizationRequestRepository implements ServerAuthorization
                 .doOnNext(r -> {
                     exchange.getResponse().addCookie(cookieFactory.expire(CookieFactory.OAUTH_REQUEST));
                     // 콜백의 쿼리로 목적지를 바꾸지 않습니다. 같은 state 의 저장된 선택만 사용합니다.
-                    exchange.getAttributes().put(LOCAL_FRONTEND, Boolean.TRUE.equals(r.getAttribute(LOCAL_FRONTEND))
-                            && r.getState() != null && r.getState().equals(exchange.getRequest().getQueryParams().getFirst("state")));
+                    String base = r.<Object>getAttribute(FRONTEND) instanceof String name ? FRONTENDS.get(name) : null;
+                    if (base != null && r.getState() != null
+                            && r.getState().equals(exchange.getRequest().getQueryParams().getFirst("state"))) {
+                        exchange.getAttributes().put(FRONTEND_BASE, base);
+                    }
                 });
     }
 

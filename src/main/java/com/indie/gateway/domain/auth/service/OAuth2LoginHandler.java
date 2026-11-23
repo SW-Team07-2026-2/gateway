@@ -29,7 +29,7 @@ import java.util.Map;
  *    처음      → SIGNUP(사인업 토큰) · XSRF-TOKEN Set-Cookie → ⑤ 302 프론트 가입(밴드 고르기) — 회원은 POST /api/auth/signup 에서 생김
  * </pre>
  * 프론트는 사인업 토큰을 읽을 수 없습니다(HttpOnly) — 처음인지는 302 목적지로 압니다.
- * 🔴 에러 메시지를 쿼리에 그대로 넣지 않습니다 — 고정 코드만. 리다이렉트는 운영 설정 또는 frontend=local 의 localhost:5173 만.
+ * 🔴 에러 메시지를 쿼리에 그대로 넣지 않습니다 — 고정 코드만. 리다이렉트는 운영 설정 또는 frontend=local · vercel 의 고정 주소만 (CookieAuthorizationRequestRepository).
  */
 @Component
 public class OAuth2LoginHandler implements ServerAuthenticationSuccessHandler, ServerAuthenticationFailureHandler {
@@ -93,9 +93,10 @@ public class OAuth2LoginHandler implements ServerAuthenticationSuccessHandler, S
         throw new IllegalArgumentException("unsupported provider: " + registrationId);
     }
 
-    private static Mono<Void> redirect(ServerWebExchange exchange, String location, String localPath) {
-        if (Boolean.TRUE.equals(exchange.getAttribute(CookieAuthorizationRequestRepository.LOCAL_FRONTEND))) {
-            location = "http://localhost:5173" + localPath;
+    private static Mono<Void> redirect(ServerWebExchange exchange, String location, String frontendPath) {
+        String frontendBase = exchange.getAttribute(CookieAuthorizationRequestRepository.FRONTEND_BASE);
+        if (frontendBase != null) {
+            location = frontendBase + frontendPath;
         }
         exchange.getResponse().setStatusCode(HttpStatus.FOUND);
         exchange.getResponse().getHeaders().setLocation(URI.create(location));
