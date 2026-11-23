@@ -51,7 +51,21 @@ public class RateLimitFilter implements WebFilter, Ordered {
         if (HttpMethod.POST.equals(request.getMethod()) && path.equals("/api/auth/refresh")) return RateLimiterConfig.AUTH_REFRESH;
         if (path.startsWith("/oauth2/authorization/")) return RateLimiterConfig.OAUTH2_AUTHORIZE;
         if (HttpMethod.POST.equals(request.getMethod()) && path.equals("/api/members/me/metrics")) return RateLimiterConfig.MEMBER_METRICS;
+        if (HttpMethod.GET.equals(request.getMethod()) && isSearch(request, path)) return RateLimiterConfig.SEARCH;
         return null;
+    }
+
+    /**
+     * 검색 — 검색 · 팔로우 탭 경로 전부(칩만 바꿔도 다시 부름)와, 검색어(q)를 붙인 그 밖의 catalog · concert 조회
+     * (가입 화면 아티스트 검색 /api/catalog/artists?q= 등). 상세 · 장바구니 · 예매 · 대기열은 대상이 아닙니다
+     */
+    private static boolean isSearch(ServerHttpRequest request, String path) {
+        if (path.equals("/api/catalog/search") || path.startsWith("/api/catalog/search/") || path.startsWith("/api/catalog/following/")
+                || path.equals("/api/concerts/search") || path.equals("/api/concerts/following")) {
+            return true;
+        }
+        return request.getQueryParams().containsKey("q")
+                && (path.startsWith("/api/catalog/") || path.equals("/api/concerts") || path.startsWith("/api/concerts/"));
     }
 
     private String userKey(ServerWebExchange exchange) {
