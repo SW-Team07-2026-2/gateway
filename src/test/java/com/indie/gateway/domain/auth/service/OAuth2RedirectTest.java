@@ -71,23 +71,23 @@ class OAuth2RedirectTest {
 
     @ParameterizedTest
     @ValueSource(strings = {"", "local", "vercel"})
-    void cancelledLoginReturnsToSelectedLogin(String frontend) {
+    void cancelledLoginReturnsToSelectedHome(String frontend) {
         MockServerWebExchange callback = callback(start(frontend), "?error=access_denied&state=state");
 
         handler(Mono.empty()).onAuthenticationFailure(webFilter(callback), new OAuth2AuthenticationException("access_denied")).block();
 
-        assertLocation(callback, FRONTENDS.get(frontend) + "/login?error=oauth_failed");
+        assertLocation(callback, FRONTENDS.get(frontend) + "/?error=oauth_failed");
     }
 
     @ParameterizedTest
     @ValueSource(strings = {"", "local", "vercel"})
-    void memberFailureReturnsToSelectedLogin(String frontend) {
+    void memberFailureReturnsToSelectedHome(String frontend) {
         MockServerWebExchange callback = callback(start(frontend), "?code=code&state=state");
 
         handler(Mono.error(new IllegalStateException("member unavailable")))
                 .onAuthenticationSuccess(webFilter(callback), authentication).block();
 
-        assertLocation(callback, FRONTENDS.get(frontend) + "/login?error=signup_failed");
+        assertLocation(callback, FRONTENDS.get(frontend) + "/?error=signup_failed");
     }
 
     @ParameterizedTest
@@ -117,7 +117,7 @@ class OAuth2RedirectTest {
 
         handler(Mono.empty()).onAuthenticationFailure(webFilter(callback), new OAuth2AuthenticationException("invalid_state_parameter")).block();
 
-        assertLocation(callback, "https://example.com/login?error=oauth_failed");
+        assertLocation(callback, "https://example.com/?error=oauth_failed");
     }
 
     @Test
@@ -127,7 +127,7 @@ class OAuth2RedirectTest {
 
         handler(Mono.empty()).onAuthenticationFailure(webFilter(callback), new OAuth2AuthenticationException("authorization_request_not_found")).block();
 
-        assertLocation(callback, "https://example.com/login?error=oauth_failed");
+        assertLocation(callback, "https://example.com/?error=oauth_failed");
     }
 
     private static String start(String frontend) {
