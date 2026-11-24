@@ -71,14 +71,14 @@ public class OAuth2LoginHandler implements ServerAuthenticationSuccessHandler, S
                 })
                 .onErrorResume(e -> {
                     log.error("oauth_signup_failed provider={} error={}", provider, e.toString());
-                    return redirect(exchange, props.failureRedirect() + "?error=signup_failed", "/login?error=signup_failed");
+                    return redirect(exchange, props.failureRedirect() + "?error=signup_failed", "/?error=signup_failed");
                 });
     }
 
     @Override
     public Mono<Void> onAuthenticationFailure(WebFilterExchange webFilterExchange, AuthenticationException exception) {
         log.warn("oauth_failed error={}", exception.toString());
-        return redirect(webFilterExchange.getExchange(), props.failureRedirect() + "?error=oauth_failed", "/login?error=oauth_failed");
+        return redirect(webFilterExchange.getExchange(), props.failureRedirect() + "?error=oauth_failed", "/?error=oauth_failed");
     }
 
     /** 카카오 프로필 → Member 요청. 이메일 미동의면 email 은 null (Member 는 provider+providerUid 로 식별) · 10/28 로그인은 카카오만 */

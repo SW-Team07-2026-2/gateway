@@ -91,7 +91,7 @@ app:
     redirect-base: https://api.${app.domain}
     success-redirect: https://${app.domain}/            # ★ 허용 목록 — 고정값만
     signup-redirect: https://${app.domain}/welcome      # 처음 로그인 → 약관 동의 · 취향 선택 (SIGNUP 쿠키)
-    failure-redirect: https://${app.domain}/login
+    failure-redirect: https://${app.domain}/            # ✏️ 11/24 실패 · 취소 → 첫 화면(카카오 버튼)에서 다시 시도 · 이전 /login 은 프론트에 없어 404
   sanity:                                               # ⓪ 필터 한계값 (§5-⓪)
     max-body-bytes: 1048576                             # 1 MiB — ✏️ 11/04 무대 이미지 업로드 예외(10 MiB · /api/studio/)는 관리자 진입과 같이 KT 로 (56B)
     max-query-params: 30
