@@ -54,6 +54,10 @@ server:
   forward-headers-strategy: framework                   # ★ ALB · Cloudflare 뒤
   shutdown: graceful
   netty.max-initial-line-length: 8192
+  # ✏️ 11/25 k6 3,000명 — 연결 하나로 계속 받으면 Pod 가 재시작된 뒤 다시 맺은 연결이 남은 Pod 로 몰려 그대로 남습니다
+  #   (ALB · cloudflared · k6 모두 연결을 재사용 · kube-proxy 는 연결마다 Pod 를 고름) → 100건마다 Connection: close 로 닫아 다시 퍼지게
+  #   idle-timeout 은 두지 않습니다(무한) — 두려면 ALB 유휴 60초보다 길게 (짧으면 ALB 가 닫힌 연결에 보내 502)
+  netty.max-keep-alive-requests: 100
 
 management:
   server.port: 8090                                     # ★ 트래픽 포트와 분리
