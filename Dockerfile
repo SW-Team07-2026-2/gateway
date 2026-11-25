@@ -16,9 +16,12 @@ WORKDIR /app
 COPY --from=build /app/build/libs/*.jar app.jar
 USER app
 EXPOSE 8080 8090
+# ✏️ 11/25 k6 3,000명 — SerialGC(GC 스레드 1개)는 멈출 때마다 Netty 이벤트 루프 전체가 같이 멈춥니다 (GC 91번 · 합 10.7초 · 최대 472ms · 상태 점검 시간 초과)
+#   → ParallelGC: 멈춤은 그대로 전체지만 CPU 한도만큼 스레드로 나눠 짧게. CPU 한도 1코어(AWS)면 SerialGC 와 같습니다
+#   GC 는 JAVA_TOOL_OPTIONS 로 못 바꿉니다 — 여기 플래그가 뒤에 와서 두 GC 가 함께 켜져 기동 실패
 ENTRYPOINT ["java", \
   "-XX:MaxRAMPercentage=70", \
-  "-XX:+UseSerialGC", \
+  "-XX:+UseParallelGC", \
   "-XX:MaxMetaspaceSize=128m", \
   "-Dfile.encoding=UTF-8", \
   "-Djava.security.egd=file:/dev/./urandom", \
