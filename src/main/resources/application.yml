@@ -16,6 +16,7 @@ spring:
       httpclient:
         connect-timeout: 2000
         response-timeout: 5s                            # Gateway 상한
+        pool.max-idle-time: 30s                         # ✏️ 11/26 하위 서비스 톰캣은 쉬는 연결을 60초에 닫습니다 — 그 전에 버려 막 닫힌 연결로 보내는 일(Connection prematurely closed)을 막습니다
       default-filters:
         - DedupeResponseHeader=Access-Control-Allow-Origin Access-Control-Allow-Credentials RETAIN_UNIQUE
       globalcors:
@@ -137,6 +138,7 @@ resilience4j:
     configs.default.timeout-duration: 5s
     instances:
       chatbot:   { timeout-duration: 30s }
+      payment:   { timeout-duration: 31s }              # ✏️ 11/26 결제 경로 응답 타임아웃(30s · 토스 최악 26초)이 먼저 끊게
       concert-booking: { timeout-duration: 11s }        # 75-5 — 예매 경로 응답 타임아웃(10s)이 먼저 끊게 · ✏️ 11/23 concert 에서 옮김 (concert 는 기본 5s)
       ingest-catalog: { timeout-duration: 35s }         # 응답 타임아웃(30s)이 먼저 끊어 504 로 구분되게
       ingest-member:  { timeout-duration: 35s }
