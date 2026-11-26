@@ -57,8 +57,11 @@ public class RouteConfig {
                                 .addStatusCode(UNHANDLED_ERROR)), HttpMethod.GET))
                         .uri("lb://concert"))
                 // 결제 — 🔴 재시도 0 · 폴백 없음. 조용히 실패하는 게 중복 승인보다 낫습니다
+                //   ✏️ 11/26 응답 타임아웃 30초 — 굿즈 승인(P1) · 취소는 Payment 가 토스를 승인 + 조회로 최악 26초 기다립니다 (payment read-timeout-ms).
+                //   기본 5초면 Gateway 가 먼저 504 를 내고 결제는 뒤에서 끝납니다. 티켓 승인은 이 경로가 아니라 concert-booking (10초)
                 .route("payment", r -> r.path("/api/payments", "/api/payments/**")
                         .filters(f -> f.circuitBreaker(c -> c.setName("payment").addStatusCode(UNHANDLED_ERROR)))   // 500 은 GatewayErrorHandler 가 같은 500 으로
+                        .metadata(RESPONSE_TIMEOUT_ATTR, 30_000)
                         .uri("lb://payment"))
                 // 챗봇 — 🔴 재시도 0 · 타임아웃 30s · 호출 한도 분당 5 (RateLimitFilter)
                 //   챗봇(FastAPI)도 CORS 헤더를 붙여 CorsFilter 의 값과 겹칩니다("true, true" → 브라우저가 막음) — 하나만 남깁니다.
