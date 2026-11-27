@@ -19,7 +19,6 @@ public final class GatewayFilterOrder {
     public static final int CSRF = -70;                  // 상태 변경 요청의 CSRF 검사
     public static final int RATE_LIMIT = -60;            // 호출 한도 검사
     public static final int OAUTH2_LOGIN = -55;          // 호출 한도 검사 후 OAuth2 로그인 처리
-    public static final int MEMBER_EXISTENCE = -52;      // 회원 삭제 확인 후에만 사용자 헤더 전달
     public static final int USER_HEADER_INJECT = -50;    // 검증된 회원 정보 전달
     public static final int WITHDRAWAL_COOKIE = -40;     // 탈퇴 성공 응답의 인증 쿠키 삭제
 
