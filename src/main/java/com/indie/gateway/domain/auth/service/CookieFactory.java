@@ -8,10 +8,7 @@ import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.Base64;
 
-/**
- * 쿠키 생성은 이 클래스 한 곳에서만 (§8-3).
- * 흩어지면 한 곳만 Domain 의 점을 빼먹어도 그 경로에서만 401 이 나는, 가장 찾기 힘든 버그가 생깁니다.
- */
+/** 인증 쿠키의 속성과 만료 쿠키 생성을 관리합니다. */
 @Component
 public class CookieFactory {
 
@@ -31,26 +28,43 @@ public class CookieFactory {
         this.props = props.cookie();
     }
 
+    /**
+     * 접근 토큰 쿠키를 만듭니다.
+     *
+     * @param value 쿠키에 저장할 값
+     */
     public ResponseCookie at(String value) {
         return build(AT, value, true, Duration.ofSeconds(props.atMaxAge()));
     }
 
+    /**
+     * 리프레시 토큰 쿠키를 만듭니다.
+     *
+     * @param value 쿠키에 저장할 값
+     */
     public ResponseCookie rt(String value) {
         return build(RT, value, true, Duration.ofSeconds(props.rtMaxAge()));
     }
 
-    /** 🔴 HttpOnly 를 붙이지 않습니다 — JS 가 읽어 X-XSRF-TOKEN 헤더로 되돌려야 합니다 */
+    /**
+     * 프론트가 읽을 수 있는 CSRF 토큰 쿠키를 만듭니다.
+     *
+     * @param value 쿠키에 저장할 값
+     */
     public ResponseCookie xsrf(String value) {
         return build(XSRF, value, false, Duration.ofSeconds(props.rtMaxAge()));
     }
 
     /**
-     * 사인업 토큰 — 가입 API 에만 실리도록 Path 를 좁힙니다. 로컬 프론트 연동 중에는 None 을 사용합니다.
+     * 가입 API 경로에 사용할 HttpOnly 가입 토큰 쿠키를 만듭니다.
+     *
+     * @param value 쿠키에 저장할 값
      */
     public ResponseCookie signup(String value) {
         return build(SIGNUP, value, true, Duration.ofSeconds(props.signupMaxAge()), SIGNUP_PATH, signupSameSite());
     }
 
+    /** 가입 토큰을 삭제할 만료 쿠키를 만듭니다. */
     public ResponseCookie expireSignup() {
         return build(SIGNUP, "", true, Duration.ZERO, SIGNUP_PATH, signupSameSite());
     }
@@ -59,15 +73,25 @@ public class CookieFactory {
         return "None".equalsIgnoreCase(props.sameSite()) ? "None" : "Strict";
     }
 
-    /** OAuth 인가 요청 보관 — 세션 대신 쿠키 (replica 2 에서 authorization_request_not_found 방지) */
+    /**
+     * OAuth 인가 요청을 보관할 쿠키를 만듭니다.
+     *
+     * @param value 쿠키에 저장할 값
+     */
     public ResponseCookie oauthRequest(String value) {
         return build(OAUTH_REQUEST, value, true, OAUTH_REQUEST_MAX_AGE);
     }
 
+    /**
+     * 지정한 인증 쿠키를 삭제할 만료 쿠키를 만듭니다.
+     *
+     * @param name 만료시킬 쿠키 이름
+     */
     public ResponseCookie expire(String name) {
         return build(name, "", !XSRF.equals(name), Duration.ZERO);
     }
 
+    /** 새 CSRF 토큰을 생성합니다. */
     public static String newXsrfToken() {
         byte[] bytes = new byte[32];
         RANDOM.nextBytes(bytes);
@@ -86,7 +110,7 @@ public class CookieFactory {
                 .sameSite(sameSite)
                 .maxAge(maxAge);
         if (props.domain() != null && !props.domain().isBlank()) {
-            builder.domain(props.domain());   // ★ 운영은 ".<도메인>" — 앞의 점
+            builder.domain(props.domain());   // 운영은 ".<도메인>" - 앞의 점
         }
         return builder.build();
     }

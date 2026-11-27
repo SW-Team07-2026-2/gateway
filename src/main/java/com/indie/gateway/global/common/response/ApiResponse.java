@@ -7,7 +7,7 @@ import com.indie.gateway.global.common.exception.BaseErrorCode;
 
 /**
  * 모든 HTTP 응답 본문의 공통 포맷 (각 서비스와 동일).
- * 성공 { isSuccess: true, code: "OK", message, result } · 실패 { isSuccess: false, code, message, result?, correlationId }.
+ * 성공 { isSuccess: true, code: "OK", message, result }, 실패 { isSuccess: false, code, message, result?, correlationId }.
  * Member 응답을 받을 때도 이 타입으로 읽고 result 를 꺼냅니다.
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)

@@ -27,13 +27,8 @@ import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
- * Member 의 JWKS 를 kid → 공개키 맵으로 캐시합니다 (§5-②).
- * <ul>
- *   <li>TTL 10분 — 지나면 백그라운드로 재조회하고 그동안은 기존 키로 검증. ✏️ 11/25 재조회는 쿨다운(30초)에 한 번만 —
- *       전에는 성공할 때까지 요청마다 다시 불러, k6 S7 에서 Member 가 느린 20초 동안 2,782번 몰려 Member 를 더 눌렀습니다</li>
- *   <li>모르는 kid — 즉시 1회 재조회 (쿨다운 30초). 이게 없으면 키 롤링 때 전원 로그아웃</li>
- *   <li>JWKS 가 아예 안 뜰 때 — ConfigMap 백업 공개키로 검증. Member 장애가 전체 401 이 되면 안 됩니다</li>
- * </ul>
+ * Member JWKS 공개키를 10분간 캐시합니다. 재조회는 30초 간격으로 제한합니다.
+ * 키 갱신 중에는 기존 키를 쓰고, 조회에 실패하면 설정된 백업 공개키를 사용합니다.
  */
 @Component
 public class JwksKeyStore {
@@ -59,10 +54,14 @@ public class JwksKeyStore {
 
     @EventListener(ApplicationReadyEvent.class)
     public void warmUp() {
-        fetch().subscribe();   // 기동을 막지 않습니다 — 실패하면 백업 공개키로 버팁니다
+        fetch().subscribe();   // 기동을 막지 않습니다 - 실패하면 백업 공개키로 버팁니다
     }
 
-    /** kid 에 해당하는 공개키. 없으면 1회 재조회 후 백업 공개키, 그래도 없으면 empty */
+    /**
+     * kid 에 해당하는 공개키. 없으면 1회 재조회 후 백업 공개키, 그래도 없으면 empty
+     *
+     * @param kid 공개키 식별자
+     */
     public Mono<RSAPublicKey> find(String kid) {
         Instant now = clock.instant();
         Instant last = lastTtlFetch.get();

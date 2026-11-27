@@ -13,8 +13,8 @@ import java.util.UUID;
 import java.util.regex.Pattern;
 
 /**
- * ⓪' X-Correlation-Id — 요청 헤더 · 응답 헤더 · Reactor Context(→ MDC) 에 올립니다.
- * 클라이언트 값은 길이 64 이하 · [A-Za-z0-9-] 만 통과 (로그 인젝션 방지).
+ * 요청 추적 ID를 요청과 응답 헤더, Reactor Context에 전달합니다.
+ * 클라이언트 값은 64자 이하의 영문, 숫자, 하이픈만 허용합니다.
  */
 @Component
 public class CorrelationIdFilter implements WebFilter, Ordered {

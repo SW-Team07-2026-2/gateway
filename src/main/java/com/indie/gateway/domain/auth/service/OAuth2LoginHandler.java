@@ -21,20 +21,13 @@ import java.net.URI;
 import java.util.Map;
 
 /**
- * OAuth 콜백 GET /oauth2/code/{provider} 의 후반부 (§7-2).
- * code 교환 · state 검증 · IdP 프로필 조회는 Spring Security 가 끝낸 상태로 들어옵니다.
- * <pre>
- * ③ Member POST /internal/auth/issue (11/05 카카오 싱크 폐기 — 약관은 가입 화면에서 받아 POST /api/auth/signup 으로)
- * ④ 기존 회원 → AT · RT · XSRF-TOKEN Set-Cookie → ⑤ 302 프론트 홈
- *    처음      → SIGNUP(사인업 토큰) · XSRF-TOKEN Set-Cookie → ⑤ 302 프론트 가입(밴드 고르기) — 회원은 POST /api/auth/signup 에서 생김
- * </pre>
- * 프론트는 사인업 토큰을 읽을 수 없습니다(HttpOnly) — 처음인지는 302 목적지로 압니다.
- * 🔴 에러 메시지를 쿼리에 그대로 넣지 않습니다 — 고정 코드만. 리다이렉트는 운영 설정 또는 frontend=local · vercel 의 고정 주소만 (CookieAuthorizationRequestRepository).
+ * 카카오 OAuth 콜백 -> Gateway -> Member 토큰 발급 -> 프론트 리다이렉트.
+ * 기존 회원은 인증 쿠키, 신규 회원은 가입 쿠키를 발급합니다. 오류는 고정 코드로 전달합니다.
  */
 @Component
 public class OAuth2LoginHandler implements ServerAuthenticationSuccessHandler, ServerAuthenticationFailureHandler {
 
-    /** 콜백 요청 안에서만 IdP access_token 을 두는 exchange 속성 (SecurityConfig 가 넣음 — Pod 메모리에 쌓이지 않게) */
+    /** 콜백 요청 안에서만 IdP access_token 을 두는 exchange 속성 (SecurityConfig 가 넣음 - Pod 메모리에 쌓이지 않게) */
     public static final String AUTHORIZED_CLIENT = OAuth2LoginHandler.class.getName() + ".authorizedClient";
 
     private static final Logger log = LoggerFactory.getLogger(OAuth2LoginHandler.class);
@@ -49,6 +42,12 @@ public class OAuth2LoginHandler implements ServerAuthenticationSuccessHandler, S
         this.props = props.oauth();
     }
 
+    /**
+     * 인증된 카카오 정보로 Member 토큰을 발급받고 프론트로 이동합니다.
+     *
+     * @param webFilterExchange OAuth 인증 요청과 필터 체인
+     * @param authentication OAuth 인증 결과
+     */
     @Override
     public Mono<Void> onAuthenticationSuccess(WebFilterExchange webFilterExchange, Authentication authentication) {
         ServerWebExchange exchange = webFilterExchange.getExchange();
@@ -75,13 +74,19 @@ public class OAuth2LoginHandler implements ServerAuthenticationSuccessHandler, S
                 });
     }
 
+    /**
+     * OAuth 실패 코드를 포함해 프론트로 이동합니다.
+     *
+     * @param webFilterExchange OAuth 인증 요청과 필터 체인
+     * @param exception OAuth 인증 실패 원인
+     */
     @Override
     public Mono<Void> onAuthenticationFailure(WebFilterExchange webFilterExchange, AuthenticationException exception) {
         log.warn("oauth_failed error={}", exception.toString());
         return redirect(webFilterExchange.getExchange(), props.failureRedirect() + "?error=oauth_failed", "/?error=oauth_failed");
     }
 
-    /** 카카오 프로필 → Member 요청. 이메일 미동의면 email 은 null (Member 는 provider+providerUid 로 식별) · 10/28 로그인은 카카오만 */
+    /** 카카오 프로필 -> Member 요청. 이메일 미동의면 email 은 null (Member 는 provider+providerUid 로 식별), 로그인은 카카오만 */
     @SuppressWarnings("unchecked")
     static IssueRequest toIssueRequest(String registrationId, Map<String, Object> attrs) {
         if ("kakao".equals(registrationId)) {

@@ -17,9 +17,8 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 
 /**
- * ⑤ CSRF — Double Submit. 상태변경 요청은 Cookie XSRF-TOKEN == 헤더 X-XSRF-TOKEN.
- * 면제: 웹훅(PG 서버는 쿠키가 없음 · Payment 가 서명 검증) · OAuth(state 가 대신).
- * 비교는 상수 시간.
+ * 상태 변경 요청의 XSRF-TOKEN 쿠키와 X-XSRF-TOKEN 헤더를 상수 시간으로 비교합니다.
+ * 웹훅과 OAuth 경로는 각각 서명과 state 검증을 사용하므로 제외합니다.
  */
 @Component
 public class CsrfFilter implements WebFilter, Ordered {

@@ -14,10 +14,8 @@ import reactor.core.publisher.Mono;
 import java.util.List;
 
 /**
- * 회원 탈퇴(DELETE /api/members/me)가 성공하면 인증 쿠키(AT · RT · XSRF)를 지웁니다.
- * 쿠키를 굽는 주체가 Gateway 라서 Member 는 회원 삭제 · RT 폐기까지만 하고, 브라우저의 로그아웃은 여기서 끝냅니다.
- * 🔴 성공(2xx)일 때만 — 탈퇴가 안 됐는데(4xx · 5xx · 폴백 503) 로그아웃되면 안 됩니다.
- * set 으로 넣습니다 — 같은 요청에서 ③ 선제 갱신이 붙인 새 AT · RT 가 있어도 만료 쿠키만 남습니다.
+ * Member의 회원 탈퇴가 2xx로 끝나면 Gateway에서 인증 쿠키를 만료시킵니다.
+ * 선제 갱신 쿠키가 있어도 만료 쿠키로 덮어씁니다.
  */
 @Component
 public class WithdrawalCookieFilter implements WebFilter, Ordered {

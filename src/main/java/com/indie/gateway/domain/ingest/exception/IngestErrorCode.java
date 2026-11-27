@@ -3,7 +3,7 @@ package com.indie.gateway.domain.ingest.exception;
 import com.indie.gateway.global.common.exception.BaseErrorCode;
 import org.springframework.http.HttpStatus;
 
-/** 수집 경로 (/ingest/**) 에러 — 나머지(404 · 413 · 415 · 429 · 503 · 504)는 CommonErrorCode 를 씁니다 */
+/** 수집 경로 (/ingest/**) 에러 - 나머지(404, 413, 415, 429, 503, 504)는 CommonErrorCode 를 씁니다 */
 public enum IngestErrorCode implements BaseErrorCode {
 
     INGEST_KEY_ID_INVALID(HttpStatus.UNAUTHORIZED, "X-Ingest-Key-Id 가 없거나 형식이 올바르지 않습니다"),

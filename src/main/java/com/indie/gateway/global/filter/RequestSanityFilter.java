@@ -26,8 +26,8 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * ⓪ 코드 레벨 WAF 의 1차 — 허용 목록(positive security) 방식으로 형식이 깨진 요청을 라우팅 전에 끊습니다.
- * 🔴 SQL 키워드 · 정규식 블랙리스트는 만들지 않습니다 (챗봇 질문의 select · drop 이 차단됩니다).
+ * 허용한 요청 형식을 기준으로 라우팅 전에 입력을 검사합니다.
+ * 챗봇 질문을 잘못 차단하지 않도록 SQL 키워드 블랙리스트는 사용하지 않습니다.
  */
 @Component
 public class RequestSanityFilter implements WebFilter, Ordered {
@@ -62,12 +62,12 @@ public class RequestSanityFilter implements WebFilter, Ordered {
 
         String rawPath = request.getURI().getRawPath();
         // 관리 포트(:8090) 프로브는 Host 가 Pod IP 라 Host 검사에서 제외합니다
-        // 수집 경로는 클러스터 안 Host(gateway.indie…)만 받으므로 IngestFilter 가 따로 검사합니다 (외부 Host 면 404)
+        // 수집 경로는 클러스터 안 Host(gateway.indie...)만 받으므로 IngestFilter 가 따로 검사합니다 (외부 Host 면 404)
         if (!rawPath.startsWith("/actuator/") && !PathRules.isIngest(rawPath) && !isAllowedHost(request)) {
             return invalid("host");
         }
 
-        // ★ 경로 검사는 "디코드 후" — %2e%2e%2f 는 디코드 전엔 깨끗해 보인다
+        // 경로 검사는 "디코드 후" - %2e%2e%2f 는 디코드 전엔 깨끗해 보인다
         String decoded;
         try {
             decoded = URLDecoder.decode(rawPath, StandardCharsets.UTF_8);
@@ -117,7 +117,7 @@ public class RequestSanityFilter implements WebFilter, Ordered {
                 .anyMatch(h -> h.equalsIgnoreCase(host.getHostString()));
     }
 
-    /** 본문이 없는 POST (팔로우 · 로그아웃 등)는 Content-Type 이 없어도 됩니다 */
+    /** 본문이 없는 POST (팔로우, 로그아웃 등)는 Content-Type 이 없어도 됩니다 */
     private static boolean isAllowedContentType(HttpHeaders headers, long contentLength) {
         MediaType type = headers.getContentType();
         if (type == null) {

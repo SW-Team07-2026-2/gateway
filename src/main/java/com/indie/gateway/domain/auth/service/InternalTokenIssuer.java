@@ -16,10 +16,7 @@ import java.time.Instant;
 import java.util.Date;
 import java.util.UUID;
 
-/**
- * X-Internal-Token (HS256 · 공유 시크릿). 매 호출마다 새로 만듭니다.
- * 토큰을 캐시하지 마세요 — 생성 비용은 무시할 수준이고, 캐시하면 만료 처리가 또 하나의 버그 지점이 됩니다.
- */
+/** Gateway -> 내부 서비스 호출에 쓸 HS256 토큰을 요청마다 발급합니다. */
 @Component
 public class InternalTokenIssuer {
 
@@ -36,13 +33,18 @@ public class InternalTokenIssuer {
         this.clock = clock;
     }
 
+    /** 내부 API 호출용 토큰을 발급합니다. */
     public String issue() {
         return sign(claims(props.audience(), props.ttlSeconds()).build());
     }
 
     /**
-     * 수집 경로 (docs/22 G9) — 서명을 확인한 수집 요청에만. 서비스는 sub=ingest:* 와 본문 해시를 다시 확인합니다 (S1 · S2).
+     * 수집 경로 (docs/22 G9) - 서명을 확인한 수집 요청에만. 서비스는 sub=ingest:* 와 본문 해시를 다시 확인합니다 (S1, S2).
      * body_sha256 으로 토큰을 본문에 묶어, 가로챈 토큰을 다른 본문에 쓸 수 없게 합니다.
+     *
+     * @param audience 내부 토큰을 받을 서비스
+     * @param keyId 서명 키 ID
+     * @param bodySha256Hex 본문 SHA-256 해시의 16진수 문자열
      */
     public String issueForIngest(String audience, String keyId, String bodySha256Hex) {
         return sign(claims(audience, ingestTtlSeconds)

@@ -31,8 +31,8 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Gateway 자체 엔드포인트 — /api/auth/me · logout · refresh · signup (§7-3 ~ §7-5).
- * 쿠키를 굽는 주체가 Gateway 이므로 Member 로 라우팅하지 않습니다.
+ * 프론트 -> Gateway 인증 API -> Member 내부 API.
+ * Gateway에서 인증 쿠키를 발급하고 삭제합니다.
  */
 @RestController
 @RequestMapping("/api/auth")
@@ -54,8 +54,9 @@ public class AuthController {
     }
 
     /**
-     * 프론트의 유일한 상태 확인 수단. 비로그인 401 은 AccessTokenFilter 가 냅니다 (에러가 아니라 정상 분기).
-     * 🔴 Member 장애가 "로그인 안 된 상태"로 보이면 안 됩니다 — 200 + stale:true 로 클레임만 돌려줍니다.
+     * 로그인 상태를 조회합니다. Member 조회 실패 시 클레임과 stale=true를 반환합니다.
+     *
+     * @param exchange 현재 HTTP 요청과 응답
      */
     @GetMapping("/me")
     public Mono<ApiResponse<MeResponse>> me(ServerWebExchange exchange) {
@@ -70,7 +71,11 @@ public class AuthController {
                 .map(ApiResponse::onSuccess);
     }
 
-    /** 🔴 Member 호출이 실패해도 쿠키는 지우고 200 — 로그아웃이 실패하는 UX 가 더 나쁩니다 */
+    /**
+     * Member 토큰 폐기를 요청합니다. 호출 실패 여부와 관계없이 인증 쿠키를 삭제합니다.
+     *
+     * @param exchange 현재 HTTP 요청과 응답
+     */
     @PostMapping("/logout")
     public Mono<ApiResponse<Map<String, Object>>> logout(ServerWebExchange exchange) {
         TokenClaims claims = GatewayAttributes.claims(exchange);
@@ -94,9 +99,9 @@ public class AuthController {
     }
 
     /**
-     * 수동 폴백 — 선제 갱신(③)이 실패했을 때 프론트가 호출합니다.
-     * Member 가 RT 를 거절하면 401 + 쿠키 삭제 (프론트가 로그인 화면으로 보냄).
-     * Member 에 닿지 못한 경우는 503 으로 두고 쿠키를 지우지 않습니다 — 인프라 장애가 로그아웃이 되지 않도록.
+     * 프론트 요청으로 토큰을 갱신합니다. 토큰 거절 시 쿠키를 삭제하고, 서버 장애 시에는 유지합니다.
+     *
+     * @param exchange 현재 HTTP 요청과 응답
      */
     @PostMapping("/refresh")
     public Mono<Void> refresh(ServerWebExchange exchange) {
@@ -126,10 +131,9 @@ public class AuthController {
     }
 
     /**
-     * 11/08 가입 화면 진입 확인 — SIGNUP 쿠키(사인업 토큰)가 있으면 200, 없으면 401 SIGNUP_EXPIRED (프론트는 화면을 닫고 돌려보냄).
-     * 쿠키가 HttpOnly 라 프론트가 못 읽고, Path=/api/auth/signup 이라 이 주소로만 실려서 G13 과 같은 경로의 GET 입니다.
-     * 있는지만 봅니다 — 서명 키는 Member 에만 있습니다. 쿠키 수명 = 토큰 수명이고 가입 완료 · 401 때 지우므로 화면 판단에는 충분하고,
-     * 최종 검증은 G13 이 합니다.
+     * SIGNUP 쿠키 존재 여부로 가입 화면 진입을 확인합니다. 토큰 검증은 가입 완료 시 수행합니다.
+     *
+     * @param exchange 현재 HTTP 요청과 응답
      */
     @GetMapping("/signup")
     public Mono<Void> signupStatus(ServerWebExchange exchange) {
@@ -141,10 +145,10 @@ public class AuthController {
     }
 
     /**
-     * 가입 완료 — 약관 동의 → 밴드 고르기의 「완료」 · 「건너뛰기」. SIGNUP 쿠키(사인업 토큰) + CSRF 헤더 · { artistIds, agreements }.
-     * Member 가 회원 · 팔로우 · 동의 이력을 만들면 AT · RT 를 굽고 SIGNUP 은 지웁니다.
-     * 토큰이 없거나 만료 · 이미 사용이면 401 SIGNUP_EXPIRED, 위조 · 형식 오류면 401 SIGNUP_INVALID (프론트는 둘 다 로그인 화면으로).
-     * 약관 400 REQUIRED_AGREEMENT_MISSING · 409 TERMS_OUTDATED 는 Member 코드 그대로 — SIGNUP 은 지우지 않습니다 (다시 보낼 수 있음).
+     * Member에 가입 정보와 동의 내역을 전달하고 인증 쿠키를 발급합니다. 약관 오류 시 가입 쿠키를 유지합니다.
+     *
+     * @param body 가입할 아티스트와 약관 동의 내역
+     * @param exchange 현재 HTTP 요청과 응답
      */
     @PostMapping("/signup")
     public Mono<Void> signup(@RequestBody(required = false) SignupBody body, ServerWebExchange exchange) {
@@ -188,7 +192,7 @@ public class AuthController {
                 });
     }
 
-    /** 밴드 고르기에서 고른 아티스트(건너뛰면 빈 배열) + 11/05 약관 동의 (M24 의 약관 · 검사는 Member) */
+    /** 가입할 아티스트 목록과 약관 동의 내역. */
     public record SignupBody(List<Long> artistIds, List<SignupRequest.Agreement> agreements) {}
 
     private String ensureXsrfToken(ServerWebExchange exchange) {

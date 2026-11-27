@@ -36,7 +36,7 @@ public record GatewayProperties(
         public record Endpoint(String host, int port) {}
     }
 
-    /** 수집 경로 /ingest/** (docs/22 §1-4) — 키는 시크릿이라 여기 두지 않습니다 (IngestSignatureVerifier) */
+    /** 수집 경로 /ingest/** (docs/22 §1-4) - 키는 시크릿이라 여기 두지 않습니다 (IngestSignatureVerifier) */
     public record Ingest(List<String> hosts, long clockSkewSeconds, Duration nonceTtl, Duration bodyReadTimeout,
                          Duration responseTimeout, long tokenTtlSeconds, int maxDepth) {}
 }

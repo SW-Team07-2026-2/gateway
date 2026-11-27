@@ -26,12 +26,8 @@ import java.time.Duration;
 import java.util.stream.Collectors;
 
 /**
- * ③ 선제 갱신 — exp - now < 5분이면 RT 로 Member 에 갱신을 요청합니다.
- * <ul>
- *   <li>★ 갱신 실패가 요청 실패가 아닙니다 — 아직 만료 전 토큰이니 원래 요청을 그대로 진행</li>
- *   <li>동일 세션 동시 갱신 방지 — SETNX auth:refresh:lock:{jti} 5초. 못 잡으면 건너뜀</li>
- *   <li>★ 새 AT · RT 는 반드시 원래 응답의 Set-Cookie 에 싣습니다 (빠지면 매 요청 갱신 반복)</li>
- * </ul>
+ * 접근 토큰 만료가 5분 이내면 Member에 갱신을 요청합니다.
+ * Redis 잠금으로 동시 갱신을 막고 새 토큰을 응답 쿠키에 넣습니다. 실패해도 원래 요청은 진행합니다.
  */
 @Component
 public class PreemptiveRefreshFilter implements WebFilter, Ordered {
@@ -87,7 +83,7 @@ public class PreemptiveRefreshFilter implements WebFilter, Ordered {
                 .onErrorResume(e -> {
                     log.warn("preemptive_refresh_failed error={}", e.toString());
                     count("failure");
-                    return Mono.just(exchange);   // ★ 통과
+                    return Mono.just(exchange);   // 통과
                 });
     }
 
