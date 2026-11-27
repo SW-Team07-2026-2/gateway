@@ -11,7 +11,7 @@ import java.util.List;
 /**
  * 서명 요청의 외부 경로와 내부 서비스 경로를 고정 매핑합니다.
  * 수집 키와 회원 데이터 키를 구분하며, maxItems가 0이면 묶음 검사를 생략합니다.
- * TODO: Catalog에 굿즈 수집 API가 생기면 매핑을 추가합니다.
+ * 굿즈는 아티스트 수집 요청에 포함됩니다.
  */
 public enum IngestRoute {
 
