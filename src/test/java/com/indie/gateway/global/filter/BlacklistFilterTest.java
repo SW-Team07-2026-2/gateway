@@ -1,6 +1,7 @@
 package com.indie.gateway.global.filter;
 
 import com.indie.gateway.domain.auth.entity.TokenClaims;
+import com.indie.gateway.domain.auth.client.MemberAuthClient;
 import com.indie.gateway.global.common.util.GatewayAttributes;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.Test;
@@ -28,10 +29,12 @@ class BlacklistFilterTest {
     private final ReactiveValueOperations<String, String> values = mock(ReactiveValueOperations.class);
     private final ReactiveStringRedisTemplate redis = mock(ReactiveStringRedisTemplate.class);
     private final SimpleMeterRegistry meters = new SimpleMeterRegistry();
-    private final BlacklistFilter filter = new BlacklistFilter(redis, meters);
+    private final MemberAuthClient member = mock(MemberAuthClient.class);
+    private final BlacklistFilter filter = new BlacklistFilter(redis, meters, member);
 
     {
         when(redis.opsForValue()).thenReturn(values);
+        when(member.exists("42")).thenReturn(Mono.just(true));
     }
 
     private MockServerWebExchange request(String path, String jti) {
@@ -87,14 +90,36 @@ class BlacklistFilterTest {
         assertThat(passed).isTrue();
     }
 
-    /** Redis 장애는 통과 - 로그아웃 확인과 같은 fail-open */
+    /** Redis 장애 시 보호 요청을 차단합니다. */
     @Test
-    void redisFailurePasses() {
+    void redisFailureBlocks() {
         when(values.multiGet(List.of("member:blacklist:device1", "member:withdrawn:42"))).thenReturn(Mono.error(new IllegalStateException("redis down")));
         AtomicBoolean passed = new AtomicBoolean();
-        filter.filter(request("/api/cart", "device1"), e -> { passed.set(true); return Mono.empty(); }).block();
-        assertThat(passed).isTrue();
+        var exchange = request("/api/cart", "device1");
+        filter.filter(exchange, e -> { passed.set(true); return Mono.empty(); }).block();
+        assertThat(passed).isFalse();
+        assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE);
         assertThat(meters.counter("gateway.blacklist.failure").count()).isEqualTo(1);
+    }
+
+    @Test
+    void lostWithdrawalMarkerStillBlocksEveryDevice() {
+        when(member.exists("42")).thenReturn(Mono.just(false));
+        for (String device : List.of("device1", "device2")) {
+            redisHas(device, null, null);
+            var exchange = request("/api/cart", device);
+            filter.filter(exchange, e -> Mono.error(new AssertionError("deleted member passed"))).block();
+            assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        }
+    }
+
+    @Test
+    void memberFailureBlocksWhenMarkerIsMissing() {
+        redisHas("device1", null, null);
+        when(member.exists("42")).thenReturn(Mono.error(new IllegalStateException("down")));
+        var exchange = request("/api/cart", "device1");
+        filter.filter(exchange, e -> Mono.error(new AssertionError("passed"))).block();
+        assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE);
     }
 
     @Test
