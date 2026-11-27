@@ -1,6 +1,8 @@
 package com.indie.gateway.global.filter;
 
 import com.indie.gateway.domain.auth.entity.TokenClaims;
+import com.indie.gateway.domain.auth.client.MemberAuthClient;
+import com.indie.gateway.global.common.exception.CommonErrorCode;
 import com.indie.gateway.domain.auth.exception.AuthErrorCode;
 import com.indie.gateway.global.common.response.ErrorResponses;
 import com.indie.gateway.global.common.util.GatewayAttributes;
@@ -22,7 +24,7 @@ import java.util.List;
 
 /**
  * 인증용 Redis 에서 로그아웃한 토큰(member:blacklist:{jti})과 탈퇴한 회원(member:withdrawn:{userId})을 한 번에(MGET) 확인합니다.
- * 두 키는 Member 가 씁니다. Redis 장애 시 요청을 허용하며 이벤트 루프를 막지 않도록 리액티브 타임아웃을 사용합니다.
+ * 두 키는 Member가 씁니다. 표시가 없으면 회원 DB로 확인하고 Redis 장애 시 보호 요청을 차단합니다.
  */
 @Component
 public class BlacklistFilter implements WebFilter, Ordered {
@@ -32,10 +34,12 @@ public class BlacklistFilter implements WebFilter, Ordered {
 
     private final ReactiveStringRedisTemplate authRedis;
     private final MeterRegistry meterRegistry;
+    private final MemberAuthClient member;
 
-    public BlacklistFilter(@Qualifier("authRedis") ReactiveStringRedisTemplate authRedis, MeterRegistry meterRegistry) {
+    public BlacklistFilter(@Qualifier("authRedis") ReactiveStringRedisTemplate authRedis, MeterRegistry meterRegistry, MemberAuthClient member) {
         this.authRedis = authRedis;
         this.meterRegistry = meterRegistry;
+        this.member = member;
     }
 
     @Override
@@ -50,8 +54,13 @@ public class BlacklistFilter implements WebFilter, Ordered {
                 .onErrorResume(e -> {
                     log.error("blacklist_check_failed error={}", e.toString());
                     meterRegistry.counter("gateway.blacklist.failure").increment();
-                    return Mono.just("");   // 통과
+                    return Mono.just("unavailable");
                 })
+                .flatMap(reason -> reason.isEmpty()
+                        ? member.exists(claims.sub()).timeout(Duration.ofSeconds(2))
+                            .map(exists -> exists ? "" : "withdrawn").defaultIfEmpty("unavailable")
+                            .onErrorReturn("unavailable")
+                        : Mono.just(reason))
                 .flatMap(reason -> {
                     if (reason.isEmpty()) return chain.filter(exchange);
                     meterRegistry.counter("gateway.auth.failure", "reason", reason).increment();
@@ -59,7 +68,8 @@ public class BlacklistFilter implements WebFilter, Ordered {
                     if (PathRules.isPublic(exchange.getRequest().getMethod(), exchange.getRequest().getPath().value())) {
                         return chain.filter(exchange);   // 공개 경로는 익명으로 계속
                     }
-                    return ErrorResponses.write(exchange, AuthErrorCode.TOKEN_REVOKED);
+                    return ErrorResponses.write(exchange, reason.equals("unavailable")
+                            ? CommonErrorCode.SERVICE_UNAVAILABLE : AuthErrorCode.TOKEN_REVOKED);
                 });
     }
 
