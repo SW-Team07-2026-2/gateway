@@ -87,7 +87,7 @@ class IngestFilterTest {
         return exchange;
     }
 
-    /** 올바르게 서명된 요청 — 수집기가 보내는 모양 */
+    /** 올바르게 서명된 요청 - 수집기가 보내는 모양 */
     static MockServerHttpRequest.BodyBuilder signed(String path, String body, long timestamp, String signWith) throws Exception {
         return signed(path, body, timestamp, signWith, "gateway.indie.svc.cluster.local:8080", KEY_ID);
     }
@@ -120,7 +120,7 @@ class IngestFilterTest {
         return Base64.getEncoder().encodeToString(sig);
     }
 
-    /** 회원 데이터 경로 — AI 가 보내는 모양. sent 는 실제로 보내는 주소, signedTarget 은 서명에 넣은 주소(경로 + 쿼리) */
+    /** 회원 데이터 경로 - AI 가 보내는 모양. sent 는 실제로 보내는 주소, signedTarget 은 서명에 넣은 주소(경로 + 쿼리) */
     static MockServerHttpRequest.BodyBuilder memberSigned(HttpMethod method, String sent, String signedTarget, String body,
                                                           String keyId, String key) throws Exception {
         long timestamp = now();
@@ -149,7 +149,7 @@ class IngestFilterTest {
         return exchange.getResponse().getBodyAsString().block(Duration.ofSeconds(1));
     }
 
-    // ── 통과 · G9 ───────────────────────────────────────────────────────
+    // ── 통과, G9
 
     @Test
     void validRequestIsForwardedWithIngestTokenAndSameBody() throws Exception {
@@ -165,7 +165,7 @@ class IngestFilterTest {
                 HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(BODY.getBytes(StandardCharsets.UTF_8))));
         assertThat(claims.getExpirationTime().getTime() - claims.getIssueTime().getTime()).isEqualTo(60_000);
         assertThat(forwarded.getHeaders().getContentLength()).isEqualTo(BODY.getBytes(StandardCharsets.UTF_8).length);
-        // 이미 읽은 본문을 하위로 다시 흘려보냄 — 재시도(두 번째 구독)에도 같은 내용
+        // 이미 읽은 본문을 하위로 다시 흘려보냄 - 재시도(두 번째 구독)에도 같은 내용
         for (int i = 0; i < 2; i++) {
             assertThat(DataBufferUtils.join(forwarded.getBody()).map(b -> b.toString(StandardCharsets.UTF_8)).block()).isEqualTo(BODY);
         }
@@ -177,7 +177,7 @@ class IngestFilterTest {
         assertThat(status(run(signed("/ingest/catalog/diff", body).body(body)))).isEqualTo(200);
     }
 
-    // ── G1 출처 ─────────────────────────────────────────────────────────
+    // ── G1 출처
 
     @Test
     void requestThroughAlbIs404() throws Exception {
@@ -190,7 +190,7 @@ class IngestFilterTest {
         assertThat(status(run(signed(PATH, BODY, now(), KEY, "api.example.com", KEY_ID).body(BODY)))).isEqualTo(404);
     }
 
-    // ── G2 고정 매핑 ────────────────────────────────────────────────────
+    // ── G2 고정 매핑
 
     @Test
     void unmappedPathIs404() throws Exception {
@@ -198,7 +198,7 @@ class IngestFilterTest {
         assertThat(status(run(signed("/ingest/catalog/artists/1", BODY).body(BODY)))).isEqualTo(404);
     }
 
-    /** 클러스터 안(G1 통과)에서 메서드만 틀리면 404 가 아니라 405 — 수집기 버그를 바로 알 수 있게 */
+    /** 클러스터 안(G1 통과)에서 메서드만 틀리면 404 가 아니라 405 - 수집기 버그를 바로 알 수 있게 */
     @Test
     void nonPostIs405() throws Exception {
         MockServerWebExchange exchange = run(MockServerHttpRequest.get(PATH).header("Host", "gateway").build());
@@ -218,21 +218,21 @@ class IngestFilterTest {
         assertThat(passed.get().getRequest().getHeaders().containsKey("X-Internal-Token")).isFalse();
     }
 
-    // ── G3 형식 ─────────────────────────────────────────────────────────
+    // ── G3 형식
 
     @Test
     void nonJsonIs415() throws Exception {
         assertThat(status(run(signed(PATH, BODY).contentType(MediaType.TEXT_PLAIN).body(BODY)))).isEqualTo(415);
     }
 
-    /** Content-Length 없이(chunked) 흘려보내도 1 MiB 에서 끊습니다 — ⓪ 필터는 Content-Length 만 봅니다 */
+    /** Content-Length 없이(chunked) 흘려보내도 1 MiB 에서 끊습니다 - 0 필터는 Content-Length 만 봅니다 */
     @Test
     void chunkedBodyOver1MiBIs413() throws Exception {
         Flux<DataBuffer> body = Flux.range(0, 5).map(i -> DefaultDataBufferFactory.sharedInstance.wrap(new byte[256 * 1024]));
         assertThat(status(run(signed(PATH, BODY).body(body)))).isEqualTo(413);
     }
 
-    /** 본문을 끝까지 안 보내는 연결 — 이벤트 루프를 붙잡지 않고 408 */
+    /** 본문을 끝까지 안 보내는 연결 - 이벤트 루프를 붙잡지 않고 408 */
     @Test
     void stalledBodyIs408WithRetryAfter() throws Exception {
         GatewayProperties base = TestProps.create(null);
@@ -247,7 +247,7 @@ class IngestFilterTest {
         assertThat(exchange.getResponse().getHeaders().getFirst("Retry-After")).isEqualTo("1");
     }
 
-    // ── G4 서명 ─────────────────────────────────────────────────────────
+    // ── G4 서명
 
     @Test
     void missingSignatureHeadersIs401() throws Exception {
@@ -255,7 +255,7 @@ class IngestFilterTest {
                 .contentType(MediaType.APPLICATION_JSON).body(BODY)))).isEqualTo(401);
     }
 
-    /** 서명 헤더 4개는 빠진 · 틀린 헤더마다 코드가 다릅니다 (모두 401) */
+    /** 서명 헤더 4개는 빠진, 틀린 헤더마다 코드가 다릅니다 (모두 401) */
     @Test
     void eachBrokenSignatureHeaderHasOwnCode() throws Exception {
         Map<String, String> cases = Map.of(
@@ -292,7 +292,7 @@ class IngestFilterTest {
         assertThat(status(run(signed(PATH, BODY).body(tampered)))).isEqualTo(401);
     }
 
-    /** 서명은 경로도 덮습니다 — artists 서명으로 albums 에 보낼 수 없음 */
+    /** 서명은 경로도 덮습니다 - artists 서명으로 albums 에 보낼 수 없음 */
     @Test
     void signatureForAnotherPathIs401() throws Exception {
         long ts = now();
@@ -305,7 +305,7 @@ class IngestFilterTest {
         assertThat(status(run(request))).isEqualTo(401);
     }
 
-    // ── G5 재전송 ───────────────────────────────────────────────────────
+    // ── G5 재전송
 
     @Test
     void staleTimestampIs401Replayed() throws Exception {
@@ -322,7 +322,7 @@ class IngestFilterTest {
         assertThat(responseBody(exchange)).contains("INGEST_REPLAYED");
     }
 
-    /** 🔴 fail-closed — 재전송을 확인할 수 없으면 받지 않습니다 */
+    /** fail-closed - 재전송을 확인할 수 없으면 받지 않습니다 */
     @Test
     void nonceStoreDownIs503WithRetryAfter() throws Exception {
         when(nonceStore.claim(anyString(), anyString())).thenReturn(Mono.error(new RedisConnectionFailureException("down")));
@@ -332,7 +332,7 @@ class IngestFilterTest {
         assertThat(passed.get()).isNull();
     }
 
-    // ── G7 호출 한도 ────────────────────────────────────────────────────
+    // ── G7 호출 한도
 
     @Test
     void overRateLimitIs429WithRetryAfter() throws Exception {
@@ -342,7 +342,7 @@ class IngestFilterTest {
         assertThat(exchange.getResponse().getHeaders().getFirst("Retry-After")).isEqualTo("1");
     }
 
-    // ── G6 봉투 ─────────────────────────────────────────────────────────
+    // ── G6 봉투
 
     @Test
     void brokenEnvelopeIs400() throws Exception {
@@ -365,9 +365,9 @@ class IngestFilterTest {
         assertThat(status(run(signed(PATH, body).body(body)))).isEqualTo(400);
     }
 
-    // ── 회원 데이터 경로 (AI → Member) ─────────────────────────────────
+    // ── 회원 데이터 경로 (AI -> Member)
 
-    /** 조회 — 본문 · Content-Type 없이, 쿼리까지 서명해 보냅니다. Member 로 가는 내부 토큰은 aud=member */
+    /** 조회 - 본문, Content-Type 없이, 쿼리까지 서명해 보냅니다. Member 로 가는 내부 토큰은 aud=member */
     @Test
     void memberMetricsQueryIsForwardedWithMemberToken() throws Exception {
         String target = METRICS + "?from=2026-11-01T00:00:00Z&metricType=DETAIL_VIEW,DWELL&aggregate=true";
@@ -383,7 +383,7 @@ class IngestFilterTest {
         assertThat(claims.getSubject()).isEqualTo("ingest:" + MEMBER_KEY_ID);
     }
 
-    /** 쓰기 — 묶음(items)이 아닌 본문도 받습니다. 본문은 그대로 Member 로 */
+    /** 쓰기 - 묶음(items)이 아닌 본문도 받습니다. 본문은 그대로 Member 로 */
     @Test
     void memberEmbeddingPutIsForwardedWithSameBody() throws Exception {
         MockServerWebExchange exchange = run(memberSigned(HttpMethod.PUT, EMBEDDING, VECTOR)
@@ -403,7 +403,7 @@ class IngestFilterTest {
         assertThat(passed.get().getRequest().getMethod()).isEqualTo(HttpMethod.GET);
     }
 
-    /** 🔴 수집 키로는 회원 데이터를 읽을 수 없고, 회원 데이터 키로는 수집 경로에 쓸 수 없습니다 */
+    /** 수집 키로는 회원 데이터를 읽을 수 없고, 회원 데이터 키로는 수집 경로에 쓸 수 없습니다 */
     @Test
     void keySetsDoNotOpenEachOthersRoutes() throws Exception {
         MockServerWebExchange read = run(memberSigned(HttpMethod.GET, METRICS, METRICS, "", KEY_ID, KEY).build());
@@ -415,7 +415,7 @@ class IngestFilterTest {
         assertThat(passed.get()).isNull();
     }
 
-    /** 서명은 쿼리도 덮습니다 — limit=10 서명으로 limit=1000 을 보낼 수 없음 */
+    /** 서명은 쿼리도 덮습니다 - limit=10 서명으로 limit=1000 을 보낼 수 없음 */
     @Test
     void tamperedQueryIs401() throws Exception {
         assertThat(status(run(memberSigned(HttpMethod.GET, METRICS + "?limit=1000", METRICS + "?limit=10", "",
@@ -424,7 +424,7 @@ class IngestFilterTest {
                 MEMBER_KEY_ID, MEMBER_KEY).build()))).isEqualTo(401);
     }
 
-    /** 서명은 메서드도 덮습니다 — 벡터 조회(GET) 서명으로 저장(PUT)할 수 없음 */
+    /** 서명은 메서드도 덮습니다 - 벡터 조회(GET) 서명으로 저장(PUT)할 수 없음 */
     @Test
     void signatureForAnotherMethodIs401() throws Exception {
         long ts = now();
@@ -452,7 +452,7 @@ class IngestFilterTest {
         }
     }
 
-    /** 쓰기에는 쿼리를 받지 않고(400) JSON 만 받습니다(415) — 수집 경로와 같은 규칙 */
+    /** 쓰기에는 쿼리를 받지 않고(400) JSON 만 받습니다(415) - 수집 경로와 같은 규칙 */
     @Test
     void memberEmbeddingPutFollowsWriteRules() throws Exception {
         assertThat(status(run(memberSigned(HttpMethod.PUT, EMBEDDING + "?x=1", VECTOR)
@@ -461,7 +461,7 @@ class IngestFilterTest {
                 .contentType(MediaType.TEXT_PLAIN).body(VECTOR)))).isEqualTo(415);
     }
 
-    /** 외부(ALB · Cloudflare 경유)에서는 서명이 맞아도 경로가 없는 것처럼 404 */
+    /** 외부(ALB, Cloudflare 경유)에서는 서명이 맞아도 경로가 없는 것처럼 404 */
     @Test
     void memberPathThroughAlbIs404() throws Exception {
         assertThat(status(run(memberSigned(HttpMethod.GET, METRICS, "").header("X-Amzn-Trace-Id", "Root=1-abc").build())))

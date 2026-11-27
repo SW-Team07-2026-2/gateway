@@ -11,7 +11,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class AccessTokenFilterTest {
 
     private final SimpleMeterRegistry registry = new SimpleMeterRegistry();
-    private final AccessTokenFilter filter = new AccessTokenFilter(null, registry);   // 쿠키 없음 → 검증기를 부르지 않음
+    private final AccessTokenFilter filter = new AccessTokenFilter(null, registry);   // 쿠키 없음 -> 검증기를 부르지 않음
 
     private int status(String path) {
         MockServerWebExchange exchange = MockServerWebExchange.from(MockServerHttpRequest.get(path).build());

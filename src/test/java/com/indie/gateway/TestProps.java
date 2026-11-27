@@ -5,7 +5,7 @@ import com.indie.gateway.global.config.GatewayProperties;
 import java.time.Duration;
 import java.util.List;
 
-/** 단위 테스트용 설정 — application.yml 의 기본값과 같습니다 */
+/** 단위 테스트용 설정 - application.yml 의 기본값과 같습니다 */
 public final class TestProps {
 
     public static GatewayProperties create(String fallbackKeyPath) {

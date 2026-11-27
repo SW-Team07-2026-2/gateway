@@ -33,7 +33,7 @@ class OAuth2RedirectTest {
 
     private static final String API = "https://api.example.com";
     private static final String CALLBACK = API + "/oauth2/code/kakao";
-    /** frontend 파라미터 → 돌아갈 주소 ("" 는 파라미터 없음 = 운영 설정값) */
+    /** frontend 파라미터 -> 돌아갈 주소 ("" 는 파라미터 없음 = 운영 설정값) */
     private static final Map<String, String> FRONTENDS = Map.of(
             "", "https://example.com",
             "local", "http://localhost:5173",

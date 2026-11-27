@@ -18,8 +18,8 @@ import static org.springframework.cloud.gateway.support.RouteMetadataUtils.RESPO
 import static org.springframework.cloud.gateway.support.ServerWebExchangeUtils.GATEWAY_ROUTE_ATTR;
 
 /**
- * 75-5 — 좌석 선점(N10) · 결제 승인(N16)만 응답 타임아웃 10초 (docs/30 R8).
- * 나머지 /api/concerts/** 는 기본 5초 · GET 재시도 그대로인 concert 라우트로 갑니다.
+ * 75-5 - 좌석 선점(N10), 결제 승인(N16)만 응답 타임아웃 10초 (docs/30 R8).
+ * 나머지 /api/concerts/** 는 기본 5초, GET 재시도 그대로인 concert 라우트로 갑니다.
  */
 @SpringBootTest(properties = {
         "spring.cloud.kubernetes.enabled=false",
@@ -44,7 +44,7 @@ class ConcertBookingRouteTest {
         }
     }
 
-    /** 다른 메서드 · 다른 예매 경로는 기본 라우트 — 응답 타임아웃은 전역 5초 */
+    /** 다른 메서드, 다른 예매 경로는 기본 라우트 - 응답 타임아웃은 전역 5초 */
     @Test
     void otherConcertPathsStayOnDefaultRoute() {
         assertDefault(HttpMethod.GET, "/api/concerts/7/bookings");
@@ -53,13 +53,13 @@ class ConcertBookingRouteTest {
         assertDefault(HttpMethod.GET, "/api/concerts/bookings/7/entry-qr");
     }
 
-    /** TimeLimiter concert-booking 11초 — 기본 5초였다면 응답 타임아웃(10초)보다 먼저 끊어 폴백이 됩니다 */
+    /** TimeLimiter concert-booking 11초 - 기본 5초였다면 응답 타임아웃(10초)보다 먼저 끊어 폴백이 됩니다 */
     @Test
     void bookingTimeLimiterDoesNotCutAt5s() {
         assertThat(runFor("concert-booking", Duration.ofSeconds(6))).isEqualTo("ok");
     }
 
-    /** ✏️ 11/23 서킷을 나눈 뒤 공연 조회(concert)는 기본 5초 — 예매 때문에 늘어나 있던 11초가 아님 */
+    /** 서킷을 나눈 뒤 공연 조회(concert)는 기본 5초 - 예매 때문에 늘어나 있던 11초가 아님 */
     @Test
     void concertTimeLimiterIsDefault5s() {
         assertThat(runFor("concert", Duration.ofSeconds(6))).isEqualTo("fallback");

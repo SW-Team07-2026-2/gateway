@@ -28,7 +28,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-/** ⑥ 호출 한도 — 메트릭 수집 (member docs/v2_member_service_re.md §6.5 · 회원당 분당 30회) · 11/23 검색 (회원당 분당 500회) */
+/** 6 호출 한도 - 메트릭 수집 (member docs/v2_member_service_re.md §6.5, 회원당 분당 30회), 검색 (회원당 분당 500회) */
 class RateLimitFilterTest {
 
     private static final String METRICS = "/api/members/me/metrics";
@@ -53,7 +53,7 @@ class RateLimitFilterTest {
         when(limiter.isAllowed(anyString(), anyString())).thenReturn(Mono.just(new RateLimiter.Response(allowed, Map.of())));
     }
 
-    /** 한도는 IP 가 아니라 회원 단위 — 같은 공유기 뒤의 다른 회원끼리 서로의 한도를 쓰지 않습니다 */
+    /** 한도는 IP 가 아니라 회원 단위 - 같은 공유기 뒤의 다른 회원끼리 서로의 한도를 쓰지 않습니다 */
     @Test
     void metricsCollectIsLimitedPerUser() {
         allow(true);
@@ -86,7 +86,7 @@ class RateLimitFilterTest {
         verify(limiter, never()).isAllowed(anyString(), anyString());
     }
 
-    /** 11/23 검색 — 검색 · 팔로우 탭 4종과 검색어를 붙인 목록은 회원당 한 묶음 */
+    /** 검색 - 검색, 팔로우 탭 4종과 검색어를 붙인 목록은 회원당 한 묶음 */
     @Test
     void searchIsLimitedPerUser() {
         allow(true);
@@ -114,7 +114,7 @@ class RateLimitFilterTest {
         verify(limiter).isAllowed(RateLimiterConfig.SEARCH, RateLimiterConfig.SEARCH + ":ip:203.0.113.7");
     }
 
-    /** 검색어 없는 목록 · 상세 · 검색 경로의 다른 메서드는 대상이 아닙니다 */
+    /** 검색어 없는 목록, 상세, 검색 경로의 다른 메서드는 대상이 아닙니다 */
     @Test
     void browsingIsNotLimitedAsSearch() {
         run(MockServerHttpRequest.get("/api/catalog/artists").build());
@@ -126,7 +126,7 @@ class RateLimitFilterTest {
         verify(limiter, never()).isAllowed(anyString(), anyString());
     }
 
-    /** 분당 500회(타자 500타/분 · 1타 = 1요청) · 한 번에 30회 */
+    /** 분당 500회(타자 500타/분, 1타 = 1요청), 한 번에 30회 */
     @Test
     void searchLimitIs500PerMinuteWithBurst30() {
         RedisRateLimiter real = new RateLimiterConfig().redisRateLimiter(mock(ReactiveStringRedisTemplate.class),

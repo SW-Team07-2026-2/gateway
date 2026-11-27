@@ -30,12 +30,12 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
 
 /**
- * 사용자 경로 서킷 (11/23). 가짜 하위 서비스를 띄워 실제 Gateway 라우트로 보냅니다.
+ * 사용자 경로 서킷 . 가짜 하위 서비스를 띄워 실제 Gateway 라우트로 보냅니다.
  * <pre>
- * 하위 500           → 서킷 실패 1 · 응답은 같은 500 INTERNAL_ERROR · 재시도 없음
- * 하위 503 (일부러)  → 본문 그대로 통과 · 서킷 실패로 세지 않음
- * 연결 실패          → 서킷 안쪽에서 다른 인스턴스로 1회 재시도
- * 서킷 열림          → 폴백 503 · 하위로 요청이 가지 않음
+ * 하위 500 -> 서킷 실패 1, 응답은 같은 500 INTERNAL_ERROR, 재시도 없음
+ * 하위 503 (일부러) -> 본문 그대로 통과, 서킷 실패로 세지 않음
+ * 연결 실패 -> 서킷 안쪽에서 다른 인스턴스로 1회 재시도
+ * 서킷 열림 -> 폴백 503, 하위로 요청이 가지 않음
  * </pre>
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = {
@@ -120,7 +120,7 @@ class CircuitBreakerRouteTest {
         assertThat(hits("/api/concerts/queue")).isEqualTo(1);
     }
 
-    /** 폴백이 없는 결제 — 500 은 GatewayErrorHandler 가 같은 500 으로, PG_PROCESSING(503)은 본문 그대로 */
+    /** 폴백이 없는 결제 - 500 은 GatewayErrorHandler 가 같은 500 으로, PG_PROCESSING(503)은 본문 그대로 */
     @Test
     void paymentCountsOnly500() {
         webhook("/api/payments/webhook/broken").expectStatus().isEqualTo(500)
@@ -131,7 +131,7 @@ class CircuitBreakerRouteTest {
         assertThat(failed("payment")).isEqualTo(1);
     }
 
-    /** 인스턴스 2개 중 1개는 닫힌 포트 — 라운드로빈이라 4번 중 최소 1번은 닫힌 포트를 고르고, 서킷 안쪽에서 다른 쪽으로 재시도 */
+    /** 인스턴스 2개 중 1개는 닫힌 포트 - 라운드로빈이라 4번 중 최소 1번은 닫힌 포트를 고르고, 서킷 안쪽에서 다른 쪽으로 재시도 */
     @Test
     void connectFailureIsRetriedInsideCircuit() {
         for (int i = 0; i < 4; i++) {

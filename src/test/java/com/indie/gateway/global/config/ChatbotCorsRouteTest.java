@@ -19,7 +19,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.cloud.gateway.support.ServerWebExchangeUtils.GATEWAY_ROUTE_ATTR;
 
 /**
- * 챗봇(FastAPI)은 자체 CORS 미들웨어가 Access-Control-Allow-Credentials · -Origin 을 붙입니다.
+ * 챗봇(FastAPI)은 자체 CORS 미들웨어가 Access-Control-Allow-Credentials, -Origin 을 붙입니다.
  * Gateway 의 CorsFilter 도 같은 헤더를 붙이므로, 겹친 값("true, true")이 나가면 브라우저가 응답을 막습니다.
  * application.yml 의 default-filters 는 Java 로 만든 라우트에 적용되지 않아 라우트에 직접 겁니다.
  */
