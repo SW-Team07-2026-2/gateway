@@ -20,9 +20,8 @@ import reactor.core.publisher.Mono;
 import java.time.Duration;
 
 /**
- * ④ jti 블랙리스트 — ★ fail-open.
- * Redis 장애 시 최악은 "로그아웃한 토큰이 30분(AT 수명) 남는 것", fail-closed 면 "서비스 전면 401".
- * 명세의 block() 예시는 이벤트 루프에서 IllegalStateException 이 나므로 리액티브 timeout 으로 같은 동작을 냅니다.
+ * 인증용 Redis에서 접근 토큰의 jti 블랙리스트를 확인합니다.
+ * Redis 장애 시 요청을 허용하며 이벤트 루프를 막지 않도록 리액티브 타임아웃을 사용합니다.
  */
 @Component
 public class BlacklistFilter implements WebFilter, Ordered {
@@ -49,7 +48,7 @@ public class BlacklistFilter implements WebFilter, Ordered {
                 .onErrorResume(e -> {
                     log.error("blacklist_check_failed error={}", e.toString());
                     meterRegistry.counter("gateway.blacklist.failure").increment();
-                    return Mono.just(false);   // ★ 통과
+                    return Mono.just(false);   // 통과
                 })
                 .flatMap(revoked -> {
                     if (!revoked) return chain.filter(exchange);

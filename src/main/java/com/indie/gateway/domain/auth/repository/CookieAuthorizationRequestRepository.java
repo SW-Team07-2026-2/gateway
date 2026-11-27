@@ -17,15 +17,15 @@ import java.util.Map;
 /**
  * OAuth 인가 요청을 세션 대신 쿠키에 보관합니다 (API 명세 §11.4 G2).
  * 세션에 두면 replica 2 에서 콜백이 다른 Pod 로 갔을 때 authorization_request_not_found 가 납니다.
- * 직렬화는 JSON — 쿠키(클라이언트 입력)를 Java 역직렬화하지 않습니다.
+ * 직렬화는 JSON - 쿠키(클라이언트 입력)를 Java 역직렬화하지 않습니다.
  */
 @Component
 public class CookieAuthorizationRequestRepository implements ServerAuthorizationRequestRepository<OAuth2AuthorizationRequest> {
 
-    /** 콜백 exchange 속성 — 로그인 결과를 돌려보낼 프론트 주소 (없으면 운영 설정값) */
+    /** 콜백 exchange 속성 - 로그인 결과를 돌려보낼 프론트 주소 (없으면 운영 설정값) */
     public static final String FRONTEND_BASE = CookieAuthorizationRequestRepository.class.getName() + ".frontendBase";
 
-    /** 인가 요청 쿠키에는 이름만 담고, 주소는 이 고정 목록에서 고릅니다 — 쿠키를 고쳐도 다른 곳으로 보낼 수 없게 */
+    /** 인가 요청 쿠키에는 이름만 담고, 주소는 이 고정 목록에서 고릅니다 - 쿠키를 고쳐도 다른 곳으로 보낼 수 없게 */
     private static final String FRONTEND = "frontend";
     private static final Map<String, String> FRONTENDS = Map.of(
             "local", "http://localhost:5173",

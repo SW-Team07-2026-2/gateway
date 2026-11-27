@@ -21,12 +21,18 @@ import java.util.Set;
 import java.util.concurrent.TimeoutException;
 
 /**
- * /fallback/{service} — Circuit Breaker 개방 · 다운스트림 장애 시 (§7-7 · §10).
- * 예외: catalog 검색은 503 대신 200 + 빈 결과 + degraded:true (검색창이 에러를 뱉는 것보다 "결과 없음"이 낫다).
+ * 서비스 호출 실패 -> Gateway 폴백 응답 -> 프론트.
+ * Catalog 검색은 빈 결과와 degraded=true를 반환하고, 수집 요청은 Retry-After를 제공합니다.
  */
 @RestController
 public class FallbackController {
 
+    /**
+     * 서비스별 폴백 응답을 반환합니다.
+     *
+     * @param service 호출에 실패한 서비스 이름
+     * @param exchange 현재 HTTP 요청과 응답
+     */
     @RequestMapping("/fallback/{service}")
     public Mono<Void> fallback(@PathVariable String service, ServerWebExchange exchange) {
         if ("catalog".equals(service) && isCatalogSearch(exchange)) {
@@ -35,7 +41,7 @@ public class FallbackController {
         if ("ingest".equals(service)) {
             return ingest(exchange);
         }
-        // ✏️ 11/23 서킷이 실패로 센 하위 500 (RouteConfig.UNHANDLED_ERROR) — 서비스가 낸 것과 같은 500 INTERNAL_ERROR 로 돌려줍니다 (503 아님)
+        // 서킷이 실패로 센 하위 500 (RouteConfig.UNHANDLED_ERROR) - 서비스가 낸 것과 같은 500 INTERNAL_ERROR 로 돌려줍니다 (503 아님)
         if (exchange.getAttribute(ServerWebExchangeUtils.CIRCUITBREAKER_EXECUTION_EXCEPTION_ATTR) instanceof HttpStatusCodeException) {
             CommonErrorCode code = CommonErrorCode.INTERNAL_ERROR;
             return ErrorResponses.write(exchange, code.getStatus(),
@@ -47,7 +53,7 @@ public class FallbackController {
     }
 
     /**
-     * 수집 (docs/22) — 응답 지연은 504, 연결 실패(재시도 1회 뒤) · CB 개방 · 인스턴스 없음은 503. 둘 다 Retry-After 30초.
+     * 수집 (docs/22) - 응답 지연은 504, 연결 실패(재시도 1회 뒤), CB 개방, 인스턴스 없음은 503. 둘 다 Retry-After 30초.
      * 504 는 하위 서비스가 끝까지 처리했을 수도 있지만 upsert 가 멱등(S6)이라 같은 본문을 다시 보내도 안전합니다.
      */
     private static Mono<Void> ingest(ServerWebExchange exchange) {

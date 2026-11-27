@@ -12,9 +12,8 @@ import reactor.core.publisher.Mono;
 import java.time.Duration;
 
 /**
- * /api/auth/me 의 프로필 5분 캐시 (§9-3) — 캐시용 Redis auth:profile:{userId}.
- * Member 가 닉네임을 바꿔도 무효화할 방법이 없습니다 (Gateway 는 이벤트를 받지 않음) — 최대 5분 늦게 보입니다.
- * Redis 장애 · LRU 축출 · 깨진 값은 캐시 미스로 취급합니다 — 인증용(noeviction) 메모리를 블랙리스트에 남기려고 캐시용에 둡니다 (50A).
+ * Member 프로필을 캐시용 Redis에 5분간 보관합니다.
+ * 닉네임 변경은 최대 5분 뒤 반영되며, Redis 장애나 잘못된 값은 캐시 미스로 처리합니다.
  */
 @Component
 public class ProfileCache {
@@ -31,7 +30,7 @@ public class ProfileCache {
         this.memberAuthClient = memberAuthClient;
     }
 
-    /** 캐시 → Member 순으로 찾습니다. Member 도 실패하면 error 를 냅니다 (호출자가 stale 처리) */
+    /** 캐시 -> Member 순으로 찾습니다. Member 도 실패하면 error 를 냅니다 (호출자가 stale 처리) */
     public Mono<ProfileResponse> get(String userId) {
         String key = "auth:profile:" + userId;
         Mono<ProfileResponse> fromMember = memberAuthClient.profile(userId)

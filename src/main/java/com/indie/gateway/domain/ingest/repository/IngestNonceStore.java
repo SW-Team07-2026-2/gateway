@@ -9,9 +9,8 @@ import reactor.core.publisher.Mono;
 import java.time.Duration;
 
 /**
- * 수집 요청 재전송 차단 (docs/22 G5) — 인증용 Redis 에 ingest:nonce:{키 ID}:{nonce} SET NX.
- * TTL 은 허용 시각 범위(±300초)의 두 배라, 범위 안에서 같은 nonce 가 두 번 들어올 수 없습니다.
- * 🔴 캐시용(LRU)에 두면 메모리 압박 시 TTL 전에 밀려나 같은 요청이 다시 통과합니다 (50A)
+ * 인증용 Redis의 SET NX로 서명 요청의 nonce 재사용을 막습니다.
+ * TTL은 허용 시각 범위의 두 배이며, 만료 전 축출을 막기 위해 noeviction Redis를 사용합니다.
  */
 @Component
 public class IngestNonceStore {
@@ -24,7 +23,7 @@ public class IngestNonceStore {
         this.ttl = props.ingest().nonceTtl();
     }
 
-    /** 처음 보는 nonce 면 true. 🔴 Redis 오류 · 타임아웃(300ms)은 error 그대로 — 호출하는 쪽이 거부합니다 (fail-closed) */
+    /** 처음 보는 nonce 면 true. Redis 오류, 타임아웃(300ms)은 error 그대로 - 호출하는 쪽이 거부합니다 (fail-closed) */
     public Mono<Boolean> claim(String keyId, String nonce) {
         return authRedis.opsForValue().setIfAbsent("ingest:nonce:" + keyId + ":" + nonce, "1", ttl);
     }

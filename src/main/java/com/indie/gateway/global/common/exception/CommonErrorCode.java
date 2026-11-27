@@ -2,7 +2,7 @@ package com.indie.gateway.global.common.exception;
 
 import org.springframework.http.HttpStatus;
 
-/** 요청 검사 · 라우팅 · 하위 서비스 장애 에러 (§7-8) */
+/** 요청 검사, 라우팅, 하위 서비스 장애 에러 (§7-8) */
 public enum CommonErrorCode implements BaseErrorCode {
 
     INVALID_REQUEST(400, "잘못된 요청입니다"),

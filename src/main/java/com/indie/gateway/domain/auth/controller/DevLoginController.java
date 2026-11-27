@@ -14,10 +14,8 @@ import reactor.core.publisher.Mono;
 import java.util.Map;
 
 /**
- * 🔴 local 프로파일 전용 — 카카오 키 없이 로그인 흐름을 재현합니다.
- * OAuth 콜백의 ③~④ 를 그대로 탑니다 — 기존 회원이면 AT · RT · XSRF, 처음이면 SIGNUP · XSRF (이어서 POST /api/auth/signup).
- * IdP 단계만 건너뜁니다.
- * 운영 프로파일에는 빈이 없으므로 /dev/login 은 404 입니다.
+ * 로컬 프론트 -> Gateway -> Member 토큰 발급 API.
+ * local 프로파일에서만 OAuth 인증 없이 로그인 흐름을 확인합니다.
  */
 @RestController
 @Profile("local")
@@ -31,6 +29,12 @@ public class DevLoginController {
         this.cookieFactory = cookieFactory;
     }
 
+    /**
+     * 로컬 회원의 토큰을 발급받아 로그인 쿠키를 설정합니다.
+     *
+     * @param nickname 로컬 테스트 회원 닉네임
+     * @param exchange 현재 HTTP 요청과 응답
+     */
     @GetMapping("/dev/login")
     public Mono<ApiResponse<Map<String, Object>>> login(@RequestParam(defaultValue = "로컬유저") String nickname, ServerWebExchange exchange) {
         IssueRequest request = new IssueRequest("KAKAO", "local-dev-" + nickname, null, nickname, null);
