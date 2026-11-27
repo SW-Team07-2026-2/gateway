@@ -14,12 +14,12 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-/** 10/28 가입 — 사인업 토큰 쿠키 · 공개 경로 · 카카오 프로필 매핑 (11/05 약관은 가입 화면 · M24 공개) */
+/** 가입 - 사인업 토큰 쿠키, 공개 경로, 카카오 프로필 매핑 (약관은 가입 화면, M24 공개) */
 class SignupFlowTest {
 
     private final CookieFactory cookies = new CookieFactory(TestProps.create("/nonexistent"));
 
-    /** ★ 가입 API 에만 실리고(Path) JS 가 못 읽고(HttpOnly) 다른 사이트에서 안 실림(Strict) */
+    /** 가입 API 에만 실리고(Path) JS 가 못 읽고(HttpOnly) 다른 사이트에서 안 실림(Strict) */
     @Test
     void signupCookieIsNarrow() {
         ResponseCookie c = cookies.signup("tok");
@@ -49,17 +49,17 @@ class SignupFlowTest {
         assertThat(crossSite.signup("signup").getPath()).isEqualTo("/api/auth/signup");
     }
 
-    /** 아직 회원이 아니라 AT 가 없는 경로 — 가입 완료 · 11/05 약관. 챗봇은 전부 로그인이 필요합니다 (11/13 — 챗봇에 없는 밴드 고르기 공개 경로 삭제) */
+    /** 아직 회원이 아니라 AT 가 없는 경로 - 가입 완료, 약관. 챗봇은 전부 로그인이 필요합니다 (- 챗봇에 없는 밴드 고르기 공개 경로 삭제) */
     @Test
     void signupPathsArePublic() {
         assertThat(PathRules.isPublic(HttpMethod.POST, "/api/auth/signup")).isTrue();
-        assertThat(PathRules.isPublic(HttpMethod.GET, "/api/auth/signup")).isTrue();   // 11/08 가입 화면 진입 확인
+        assertThat(PathRules.isPublic(HttpMethod.GET, "/api/auth/signup")).isTrue();   // 가입 화면 진입 확인
         assertThat(PathRules.isPublic(HttpMethod.GET, "/api/chatbot/artists/similar")).isFalse();
         assertThat(PathRules.isPublic(HttpMethod.POST, "/api/chatbot")).isFalse();
         assertThat(PathRules.isPublic(HttpMethod.GET, "/api/members/terms")).isTrue();
         assertThat(PathRules.isPublic(HttpMethod.GET, "/api/members/me/agreements")).isFalse();   // MY 는 로그인
         assertThat(PathRules.isPublic(HttpMethod.POST, "/api/members/terms")).isFalse();
-        assertThat(PathRules.isCsrfExempt("/api/auth/signup")).isFalse();   // 🔴 CSRF 는 그대로
+        assertThat(PathRules.isCsrfExempt("/api/auth/signup")).isFalse();   // CSRF 는 그대로
     }
 
     @Test
@@ -70,7 +70,7 @@ class SignupFlowTest {
         assertThat(r).isEqualTo(new IssueRequest("KAKAO", "42", "a@b.c", "새벽", null));
     }
 
-    /** 10/28 로그인은 카카오만 */
+    /** 로그인은 카카오만 */
     @Test
     void googleIsNotSupported() {
         assertThatThrownBy(() -> OAuth2LoginHandler.toIssueRequest("google", Map.of("sub", "1")))

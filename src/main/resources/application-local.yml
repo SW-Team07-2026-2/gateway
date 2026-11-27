@@ -4,7 +4,7 @@ spring:
   cloud:
     kubernetes:
       enabled: false
-      discovery.enabled: false              # ★ 로컬엔 k8s API 가 없다
+      discovery.enabled: false              # 로컬엔 k8s API 가 없다
     discovery.client.simple.instances:      # lb://<서비스> 를 localhost 로 해석 (RouteConfig 는 그대로)
       member:  [{ uri: "http://localhost:8081" }]
       catalog: [{ uri: "http://localhost:8082" }]
@@ -16,7 +16,7 @@ spring:
 
 app:
   domain: localhost
-  # 🔴 로컬 전용 — localhost 는 Domain 속성을 붙이면 브라우저가 쿠키를 거부하므로 비워서 host-only 쿠키로 굽는다
+  # 로컬 전용 - localhost 는 Domain 속성을 붙이면 브라우저가 쿠키를 거부하므로 비워서 host-only 쿠키로 굽는다
   cookie: { domain: "", secure: false, same-site: Lax }
   cors.origins: http://localhost:5173       # Svelte dev server
   member-base-url: http://localhost:8081
@@ -31,9 +31,9 @@ app:
   sanity:
     allowed-hosts: [localhost, 127.0.0.1]
   ingest:
-    hosts: [localhost, 127.0.0.1]           # 로컬 수집 스크립트 → http://localhost:8080/ingest/**
+    hosts: [localhost, 127.0.0.1]           # 로컬 수집 스크립트 -> http://localhost:8080/ingest/**
   redis:
-    cache: { host: localhost, port: 6380 }  # 캐시용 — rate limit · 프로필 캐시 (50A)
+    cache: { host: localhost, port: 6380 }  # 캐시용 - rate limit, 프로필 캐시 (50A)
 
 logging:
   pattern.console: "%d{HH:mm:ss.SSS} %-5level [%X{correlationId:-}] %logger{36} - %msg%n"

@@ -26,7 +26,7 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-/** JWKS 는 닿지 않는 주소 → 백업 공개키(파일)로 검증되는 경로까지 함께 확인합니다 */
+/** JWKS 는 닿지 않는 주소 -> 백업 공개키(파일)로 검증되는 경로까지 함께 확인합니다 */
 class AccessTokenVerifierTest {
 
     @TempDir
@@ -83,7 +83,7 @@ class AccessTokenVerifierTest {
                 .isInstanceOf(AccessTokenVerifier.TokenException.class);
     }
 
-    /** DoD 5 — 공개키를 HMAC 키로 쓴 알고리즘 혼동 공격 */
+    /** DoD 5 - 공개키를 HMAC 키로 쓴 알고리즘 혼동 공격 */
     @Test
     void hs256SignedWithPublicKeyIsRejected() throws Exception {
         SignedJWT jwt = new SignedJWT(new JWSHeader.Builder(JWSAlgorithm.HS256).keyID("k1").build(), claims(Instant.now().plusSeconds(600)));

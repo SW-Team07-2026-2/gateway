@@ -13,7 +13,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class FilterChainOrderTest {
 
-    /** 🔴 ① 헤더 제거가 ② 토큰 검증보다 먼저 — 뒤바뀌면 공개 경로에서 X-User-Id 사칭 */
+    /** 1 헤더 제거가 2 토큰 검증보다 먼저 - 뒤바뀌면 공개 경로에서 X-User-Id 사칭 */
     @Test
     void stripRunsBeforeTokenVerificationAndInjection() {
         assertThat(GatewayFilterOrder.CLIENT_HEADER_STRIP).isLessThan(GatewayFilterOrder.ACCESS_TOKEN);
@@ -24,7 +24,7 @@ class FilterChainOrderTest {
                 GatewayFilterOrder.WITHDRAWAL_COOKIE}).isSorted();
     }
 
-    /** DoD 1 — X-User-Id: 999 를 직접 보낸 요청 → 하위로 전달되는 헤더에 999 가 없음 */
+    /** DoD 1 - X-User-Id: 999 를 직접 보낸 요청 -> 하위로 전달되는 헤더에 999 가 없음 */
     @Test
     void clientSuppliedTrustedHeadersAreRemoved() {
         MockServerWebExchange exchange = MockServerWebExchange.from(MockServerHttpRequest.get("/api/catalog/albums")
