@@ -8,11 +8,7 @@ import org.springframework.web.server.WebFilter;
 import org.springframework.web.server.WebFilterChain;
 import reactor.core.publisher.Mono;
 
-/**
- * 응답 보안 헤더 (§5 응답).
- * ★ beforeCommit — chain.filter().then(...) 은 응답이 커밋된 뒤라 헤더가 반영되지 않습니다.
- * 순서를 가장 앞에 두어 ⓪~⑤ 가 거절한 응답에도 헤더가 붙게 합니다.
- */
+/** 응답 커밋 전에 보안 헤더를 설정합니다. 가장 먼저 등록해 거절 응답에도 적용합니다. */
 @Component
 public class SecurityHeaderFilter implements WebFilter, Ordered {
 

@@ -15,10 +15,8 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * ① 클라이언트가 보낸 신뢰 헤더 제거 — 🔴 반드시 ② AccessTokenFilter 보다 먼저.
- * 뒤바뀌면 공개 경로에서 클라이언트의 X-User-Id 가 그대로 하위 서비스에 전달되어 사칭이 됩니다.
- * 차단하지 않고 제거만 합니다 (정상 브라우저의 실수 · 공격자에게 탐지 신호를 주지 않음).
- * CF-Connecting-IP 는 제거 대상이 아닙니다 — ALB SG 가 Cloudflare 대역만 받습니다.
+ * 토큰 검증 전에 클라이언트가 보낸 사용자 식별 헤더를 제거해 사칭을 막습니다.
+ * CF-Connecting-IP는 인프라에서 출처를 제한하므로 유지합니다.
  */
 @Component
 public class ClientHeaderStripFilter implements WebFilter, Ordered {

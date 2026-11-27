@@ -13,7 +13,7 @@ import java.time.Duration;
 @Configuration
 public class WebClientConfig {
 
-    /** Member 내부 호출용 (§8-4) — connect 1s · read 2s · 재시도 없음 */
+    /** Member 내부 호출용 (§8-4) - connect 1s, read 2s, 재시도 없음 */
     @Bean
     public WebClient memberWebClient(WebClient.Builder builder, GatewayProperties props) {
         HttpClient httpClient = HttpClient.create()

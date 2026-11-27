@@ -19,10 +19,7 @@ import java.time.Instant;
 import java.util.Date;
 import java.util.List;
 
-/**
- * AT 검증 — 서명 RS256 · iss · exp · nbf.
- * 🔴 alg 를 토큰에서 읽어 그대로 쓰지 않습니다. RS256 이 아니면 거절 (alg=none · HS256 혼동 공격 차단).
- */
+/** 접근 토큰의 RS256 서명과 발급자, 만료 시각, 유효 시작 시각을 검증합니다. */
 @Component
 public class AccessTokenVerifier {
 
@@ -38,6 +35,11 @@ public class AccessTokenVerifier {
         this.clock = clock;
     }
 
+    /**
+     * 접근 토큰의 서명과 클레임을 검증합니다.
+     *
+     * @param token 접근 토큰 문자열
+     */
     public Mono<TokenClaims> verify(String token) {
         SignedJWT jwt;
         try {
@@ -53,7 +55,11 @@ public class AccessTokenVerifier {
                 .flatMap(key -> Mono.fromCallable(() -> check(jwt, key)));
     }
 
-    /** 이미 Member 가 발급해 돌려준 토큰에서 클레임만 읽습니다 (선제 갱신 직후) */
+    /**
+     * 이미 Member 가 발급해 돌려준 토큰에서 클레임만 읽습니다 (선제 갱신 직후)
+     *
+     * @param token 접근 토큰 문자열
+     */
     public static TokenClaims readClaims(String token) {
         try {
             return toClaims(SignedJWT.parse(token).getJWTClaimsSet());
@@ -72,7 +78,7 @@ public class AccessTokenVerifier {
         }
         JWTClaimsSet claims = jwt.getJWTClaimsSet();
         Date now = Date.from(clock.instant());
-        // 서명은 맞는데 클레임이 틀린 토큰 — 발급 쪽 설정 오류 신호라 사유를 남깁니다 (응답 코드는 하나로)
+        // 서명은 맞는데 클레임이 틀린 토큰 - 발급 쪽 설정 오류 신호라 사유를 남깁니다 (응답 코드는 하나로)
         if (!issuer.equals(claims.getIssuer())) {
             throw rejected("issuer");
         }

@@ -19,13 +19,9 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * 수집 서명 (docs/22 G4) — Payment 웹훅 HMAC 검증과 같은 방식.
- * <pre>
- * base64( HMAC-SHA256( key, "{METHOD}\n{path}[?{query}]\n{timestamp}\n{nonce}\n{hex(sha256(body))}" ) )
- * </pre>
- * 쿼리는 보낸 그대로(인코딩된 원문)이고, 없으면 "?" 도 붙이지 않습니다 — 수집(POST · 쿼리 없음)의 서명 문자열은 전과 같습니다.
- * 키는 configtree 파일 {키 묶음}.{키 ID} 에서 읽습니다 — 수집은 ingest.keys.* · 회원 데이터는 ingest.member-keys.* (IngestRoute.KeySet).
- * 키 회전 — 현재 · 직전 키를 같이 둡니다. 시크릿이라 GatewayProperties(record · toString 에 값이 찍힘)에 넣지 않습니다.
+ * 서명 요청의 HMAC-SHA256을 검증합니다.
+ * 서명 원문은 메서드, 경로와 원본 쿼리, 시각, nonce, 본문 해시를 줄바꿈으로 연결합니다.
+ * 키는 configtree에서 묶음별로 읽으며 현재 키와 직전 키를 허용합니다.
  */
 @Component
 public class IngestSignatureVerifier {
@@ -54,8 +50,17 @@ public class IngestSignatureVerifier {
     }
 
     /**
-     * 키 ID 가 없거나 서명이 다르면 false (둘을 구분하지 않습니다 — 키 ID 존재 여부를 알려주지 않게).
+     * 키 ID 가 없거나 서명이 다르면 false (둘을 구분하지 않습니다 - 키 ID 존재 여부를 알려주지 않게).
      * 다른 묶음의 키 ID 도 "없는 키" 입니다. target 은 경로 + (쿼리가 있으면 "?" + 쿼리 원문).
+     *
+     * @param keySet 요청 경로에 허용된 서명 키 묶음
+     * @param keyId 서명 키 ID
+     * @param method HTTP 메서드
+     * @param target 경로와 인코딩된 원본 쿼리
+     * @param timestamp 서명에 사용한 요청 시각
+     * @param nonce 재전송 방지용 요청 식별자
+     * @param bodySha256Hex 본문 SHA-256 해시의 16진수 문자열
+     * @param signature 요청 본문을 검증할 HMAC 서명
      */
     public boolean verify(IngestRoute.KeySet keySet, String keyId, String method, String target,
                           String timestamp, String nonce, String bodySha256Hex, String signature) {
@@ -70,7 +75,7 @@ public class IngestSignatureVerifier {
             return false;
         }
         String canonical = method + "\n" + target + "\n" + timestamp + "\n" + nonce + "\n" + bodySha256Hex;
-        return MessageDigest.isEqual(hmac(key, canonical), provided);   // ★ 상수 시간 비교
+        return MessageDigest.isEqual(hmac(key, canonical), provided);   // 상수 시간 비교
     }
 
     private static byte[] hmac(SecretKeySpec key, String data) {

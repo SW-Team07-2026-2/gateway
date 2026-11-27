@@ -46,22 +46,9 @@ import java.util.concurrent.TimeoutException;
 import java.util.regex.Pattern;
 
 /**
- * 서명 경로 /ingest/** — Gateway 1차 검사 (docs/22 §1-4 G1~G9). 수집기는 묶음(items 최대 500건)으로 보내고,
- * 여기서는 <b>누가 · 어디서 · 얼마나 · 봉투가 온전한가</b>만 봅니다. 항목 안의 필드는 서비스 2차가 봅니다.
- * AI 가 회원 1명의 메트릭 · 벡터를 읽고 쓰는 회원 데이터 경로(/ingest/members/**)도 같은 검사를 거칩니다 — 다른 점은 ✏️ 표시.
- * <pre>
- * G1 출처      ALB · Cloudflare 를 거친 요청 · 클러스터 밖 Host → 404
- * G2 고정 매핑 IngestRoute 에 없으면 404 · 그 경로의 메서드가 아니면 405 · 쿼리는 ✏️ 조회(GET)에서만
- * G3 형식      JSON 만 415 (✏️ 조회는 본문이 없어 건너뜀) · 본문 1 MiB 413 (chunked 도 읽으면서 끊음) · 본문이 10초 안에 다 안 오면 408
- * G4 서명      HMAC-SHA256 (메서드 · 경로 · ✏️ 쿼리 · 본문 해시 포함 → 변조도 여기서 걸림) 401 · ✏️ 키는 경로의 키 묶음에서만 찾음
- * G5 재전송    시각 ±300초 · nonce SET NX 401 · 🔴 Redis 장애면 503 (fail-closed — 배치라 재시도하면 됨)
- * G7 호출 한도 키별 초당 10건 429 — 봉투 파싱(G6) 전에 둬서 CPU 도 같이 보호합니다
- * G6 봉투      JSON · 깊이 10 · 최상위 items 배열 1~maxItems 건 400 (✏️ 회원 데이터는 묶음이 아니라 건너뜀)
- * G8 기록      요청 1건 = 로그 1줄 (본문은 남기지 않음 — 해시만)
- * G9 전달      새 X-Internal-Token (iss=gateway · sub=ingest:{키} · body_sha256 · TTL 60초)
- * </pre>
- * 하위 서비스 연결 실패 · 응답 지연은 라우트(RouteConfig)의 재시도 · 타임아웃 · Circuit Breaker 가 맡습니다.
- * 503 · 504 · 429 · 408 에는 Retry-After 를 붙입니다 — 수집기는 같은 본문을 <b>새 nonce · 시각으로 다시 서명</b>해 보냅니다.
+ * 서명 요청 -> Gateway 검증 -> IngestRoute에 매핑된 내부 서비스.
+ * 출처, 경로, 본문 크기, HMAC, 시각, nonce, 호출 한도와 묶음 형식을 검사합니다.
+ * 항목별 검증은 하위 서비스가 담당합니다. 재요청은 새 nonce와 시각으로 서명해야 합니다.
  */
 @Component
 public class IngestFilter implements WebFilter, Ordered {
@@ -75,7 +62,7 @@ public class IngestFilter implements WebFilter, Ordered {
     private static final Pattern KEY_ID_FORMAT = Pattern.compile("[A-Za-z0-9-]{1,64}");
     private static final Pattern NONCE_FORMAT = Pattern.compile("[A-Za-z0-9-]{16,64}");
     private static final Pattern TIMESTAMP_FORMAT = Pattern.compile("\\d{1,12}");
-    /** ALB · Cloudflare 가 붙이는 헤더 — X-Forwarded-For 는 ForwardedHeaderTransformer 가 필터보다 먼저 지우므로 이걸로 봅니다 */
+    /** ALB, Cloudflare 가 붙이는 헤더 - X-Forwarded-For 는 ForwardedHeaderTransformer 가 필터보다 먼저 지우므로 이걸로 봅니다 */
     private static final List<String> PROXY_HEADERS = List.of("X-Amzn-Trace-Id", "CF-Ray", "CF-Connecting-IP", "X-Forwarded-For");
 
     private final GatewayProperties.Ingest props;
@@ -113,14 +100,14 @@ public class IngestFilter implements WebFilter, Ordered {
         HttpHeaders headers = request.getHeaders();
         String keyId = headers.getFirst(KEY_ID);
 
-        // G1 — 외부에서 온 요청에는 이 경로가 있다는 것도 알려주지 않습니다
+        // G1 - 외부에서 온 요청에는 이 경로가 있다는 것도 알려주지 않습니다
         if (PROXY_HEADERS.stream().anyMatch(headers::containsKey)) {
             return reject(exchange, "source_proxy", keyId, CommonErrorCode.NOT_FOUND);
         }
         if (!isClusterHost(headers)) {
             return reject(exchange, "source_host", keyId, CommonErrorCode.NOT_FOUND);
         }
-        // G2 — 여기부터는 클러스터 안 호출이라 경로 · 메서드를 구분해 알려줍니다
+        // G2 - 여기부터는 클러스터 안 호출이라 경로, 메서드를 구분해 알려줍니다
         List<IngestRoute> mapped = IngestRoute.of(path);
         if (mapped.isEmpty()) {
             return reject(exchange, "route", keyId, CommonErrorCode.NOT_FOUND);
@@ -134,7 +121,7 @@ public class IngestFilter implements WebFilter, Ordered {
         if (!read && !target.equals(path)) {   // 쿼리는 조회에서만 받습니다 (서명에 포함)
             return reject(exchange, "query", keyId, CommonErrorCode.INVALID_REQUEST);
         }
-        // G3 — 조회는 본문이 없습니다
+        // G3 - 조회는 본문이 없습니다
         MediaType type = headers.getContentType();
         if (!read && (type == null || !MediaType.APPLICATION_JSON.isCompatibleWith(type))) {
             return reject(exchange, "content_type", keyId, CommonErrorCode.UNSUPPORTED_MEDIA_TYPE);
@@ -175,12 +162,12 @@ public class IngestFilter implements WebFilter, Ordered {
         if (!verifier.verify(route.keySet(), keyId, route.method().name(), target, timestamp, nonce, bodySha256, signature)) {
             return reject(exchange, "signature", keyId, IngestErrorCode.INGEST_SIGNATURE_INVALID);
         }
-        // G5 — 시각
+        // G5 - 시각
         long skew = Math.abs(clock.instant().getEpochSecond() - Long.parseLong(timestamp));
         if (skew > props.clockSkewSeconds()) {
             return reject(exchange, "timestamp", keyId, IngestErrorCode.INGEST_REPLAYED);
         }
-        // G5 — nonce
+        // G5 - nonce
         return nonceStore.claim(keyId, nonce)
                 .map(Outcome::of)
                 .defaultIfEmpty(Outcome.UNAVAILABLE)
@@ -197,13 +184,13 @@ public class IngestFilter implements WebFilter, Ordered {
 
     private Mono<Void> limitAndForward(ServerWebExchange exchange, WebFilterChain chain, IngestRoute route,
                                        String keyId, byte[] body, String bodySha256, long started) {
-        // G7 — RedisRateLimiter 는 Redis 장애 시 통과시킵니다 (바로 앞 G5 가 이미 fail-closed)
+        // G7 - RedisRateLimiter 는 Redis 장애 시 통과시킵니다 (바로 앞 G5 가 이미 fail-closed)
         return rateLimiter.isAllowed(RateLimiterConfig.INGEST, RateLimiterConfig.INGEST + ":" + keyId)
                 .flatMap(limit -> {
                     if (!limit.isAllowed()) {
                         return reject(exchange, "rate_limit", keyId, CommonErrorCode.TOO_MANY_REQUESTS);
                     }
-                    // G6 — 묶음(items)을 받는 경로만
+                    // G6 - 묶음(items)을 받는 경로만
                     int items = route.maxItems() == 0 ? 0 : countItems(body, route.maxItems());
                     if (items < 0) {
                         return reject(exchange, "envelope", keyId, CommonErrorCode.INVALID_REQUEST);
@@ -212,8 +199,8 @@ public class IngestFilter implements WebFilter, Ordered {
                     ServerWebExchange forwarded = exchange.mutate()
                             .request(withBody(exchange, tokenIssuer.issueForIngest(route.audience(), keyId, bodySha256), body))
                             .build();
-                    // G8 — 요청 1건 = 1줄. 결과 상태는 하위 서비스 응답(또는 폴백) 뒤에 확정됩니다.
-                    //   경로는 실제 값 — 회원 데이터 경로는 어느 회원을 읽고 썼는지 남습니다 (쿼리는 남기지 않음)
+                    // G8 - 요청 1건 = 1줄. 결과 상태는 하위 서비스 응답(또는 폴백) 뒤에 확정됩니다.
+                    // 경로는 실제 값 - 회원 데이터 경로는 어느 회원을 읽고 썼는지 남습니다 (쿼리는 남기지 않음)
                     return chain.filter(forwarded).doFinally(signal -> log.info(
                             "ingest_request key={} method={} path={} items={} bytes={} body_sha256={} status={} elapsed_ms={}",
                             keyId, route.method(), exchange.getRequest().getPath().value(), items, body.length, bodySha256,
@@ -221,7 +208,7 @@ public class IngestFilter implements WebFilter, Ordered {
                 });
     }
 
-    /** 최상위 { "items": [ … ] } · 1 ≤ 건수 ≤ maxItems 면 건수, 아니면 -1. 항목 안은 보지 않습니다 */
+    /** 최상위 { "items": [ ... ] }, 1 <= 건수 <= maxItems 면 건수, 아니면 -1. 항목 안은 보지 않습니다 */
     private int countItems(byte[] body, int maxItems) {
         try {
             JsonNode root = envelopeMapper.readTree(body);
@@ -230,7 +217,7 @@ public class IngestFilter implements WebFilter, Ordered {
                 return -1;
             }
             return items.size();
-        } catch (Exception e) {   // 깨진 JSON · 깊이 초과(StreamConstraintsException)
+        } catch (Exception e) {   // 깨진 JSON, 깊이 초과(StreamConstraintsException)
             return -1;
         }
     }
@@ -245,7 +232,7 @@ public class IngestFilter implements WebFilter, Ordered {
                 .build();
         return new ServerHttpRequestDecorator(request) {
             @Override
-            public Flux<DataBuffer> getBody() {   // 이미 읽은 본문을 다시 흘려보냄 — 재시도해도 매번 새 버퍼
+            public Flux<DataBuffer> getBody() {   // 이미 읽은 본문을 다시 흘려보냄 - 재시도해도 매번 새 버퍼
                 return Flux.defer(() -> Flux.just(exchange.getResponse().bufferFactory().wrap(body)));
             }
         };
@@ -266,7 +253,7 @@ public class IngestFilter implements WebFilter, Ordered {
         return ErrorResponses.write(exchange, code);
     }
 
-    /** 서명 대상 — 경로 + (쿼리가 있으면 "?" + 보낸 그대로의 쿼리) */
+    /** 서명 대상 - 경로 + (쿼리가 있으면 "?" + 보낸 그대로의 쿼리) */
     private static String target(ServerHttpRequest request) {
         String path = request.getPath().value();
         String query = request.getURI().getRawQuery();

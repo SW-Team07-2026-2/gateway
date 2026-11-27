@@ -13,7 +13,7 @@ import reactor.core.publisher.Mono;
 
 import java.nio.charset.StandardCharsets;
 
-/** 필터 · 핸들러가 응답을 직접 쓸 때 — 본문은 ApiResponse (§7-8) */
+/** 필터, 핸들러가 응답을 직접 쓸 때 - 본문은 ApiResponse (§7-8) */
 public final class ErrorResponses {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();

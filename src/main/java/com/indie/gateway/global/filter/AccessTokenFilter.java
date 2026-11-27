@@ -18,8 +18,8 @@ import org.springframework.web.server.WebFilterChain;
 import reactor.core.publisher.Mono;
 
 /**
- * ② AT 서명 · 만료 검증 (공개키).
- * 토큰 없음 — 공개 경로면 통과 · 보호 경로면 401. 공개 경로의 깨진 토큰은 익명으로 취급합니다.
+ * 접근 토큰의 서명과 만료를 검증합니다.
+ * 토큰이 없거나 잘못됐으면 공개 경로는 익명으로 처리하고 보호 경로는 401을 반환합니다.
  */
 @Component
 public class AccessTokenFilter implements WebFilter, Ordered {
@@ -40,7 +40,7 @@ public class AccessTokenFilter implements WebFilter, Ordered {
         ServerHttpRequest request = exchange.getRequest();
         String path = request.getPath().value();
         if (!PathRules.isKnown(path)) {
-            return chain.filter(exchange);   // 라우트가 없는 경로 → 404 (/internal/** 를 401 로 노출하지 않음)
+            return chain.filter(exchange);   // 라우트가 없는 경로 -> 404 (/internal/** 를 401 로 노출하지 않음)
         }
         boolean publicPath = PathRules.isPublic(request.getMethod(), path);
         HttpCookie cookie = request.getCookies().getFirst(CookieFactory.AT);

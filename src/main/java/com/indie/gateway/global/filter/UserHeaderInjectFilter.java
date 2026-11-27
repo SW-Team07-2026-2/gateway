@@ -10,9 +10,8 @@ import org.springframework.web.server.WebFilterChain;
 import reactor.core.publisher.Mono;
 
 /**
- * ⑦ X-User-Id · X-User-Roles 주입 (X-Correlation-Id 는 ⓪' 에서 이미 실렸습니다).
- * 비로그인 요청에는 X-User-Id 를 넣지 않습니다 — 빈 문자열도 안 됩니다 (서비스가 "" 를 사용자로 오인).
- * X-Internal-Token 은 /internal/** 로 가는 호출에만 붙는데, Gateway 는 /internal/** 을 라우팅하지 않으므로 여기서 붙일 일이 없습니다.
+ * 검증된 토큰의 사용자 ID와 권한을 하위 서비스 요청 헤더에 넣습니다.
+ * 비로그인 요청에는 사용자 ID를 넣지 않습니다.
  */
 @Component
 public class UserHeaderInjectFilter implements WebFilter, Ordered {

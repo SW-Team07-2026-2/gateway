@@ -24,17 +24,13 @@ import org.springframework.web.server.WebFilterChain;
 import reactor.core.publisher.Mono;
 
 /**
- * Spring Security 는 OAuth2 로그인(/oauth2/** — 시작 /oauth2/authorization/{provider} · 콜백 /oauth2/code/{provider})에만 씁니다.
- * 인증 · 인가는 필터 ⓪~⑦ 이 담당하고, 세션은 만들지 않습니다.
- *
- * <p>Security 의 기본 WebFilterChainProxy 는 order -100 으로 등록되어 ⑥ 호출 한도(-60)보다 먼저 실행됩니다.
- * 그러면 /oauth2/authorization/** 의 IP 한도가 걸리기 전에 IdP 로 302 가 나가므로, 기본 체인은 아무 요청에도
- * 매칭되지 않게 두고 OAuth2 체인을 별도 WebFilter(order -55)로 감싸 순서를 고정합니다.
+ * Spring Security는 OAuth2 로그인에만 사용하고 세션은 만들지 않습니다.
+ * OAuth2 체인을 order -55에 실행해 호출 한도 검사 뒤에 인가 요청을 처리합니다.
  */
 @Configuration
 public class SecurityConfig {
 
-    /** 기본 체인 — 어떤 요청에도 매칭되지 않음 (이 빈이 없으면 Spring Security 가 전 경로를 잠그는 기본 체인을 만듭니다) */
+    /** 기본 Security 체인이 요청에 매칭되지 않도록 설정합니다. OAuth2는 별도 필터 체인에서 처리합니다. */
     @Bean
     public SecurityWebFilterChain disabledDefaultChain(ServerHttpSecurity http) {
         return http.securityMatcher(exchange -> ServerWebExchangeMatcher.MatchResult.notMatch()).build();
@@ -55,7 +51,7 @@ public class SecurityConfig {
                 .securityContextRepository(NoOpServerSecurityContextRepository.getInstance())
                 .authorizeExchange(a -> a.anyExchange().permitAll())
                 .oauth2Login(o -> o
-                        // 콜백을 기본값 /login/oauth2/code/* 대신 /oauth2/* 아래로 — ALB 규칙(/api/* · /oauth2/*)에 걸리도록
+                        // 콜백을 기본값 /login/oauth2/code/* 대신 /oauth2/* 아래로 - ALB 규칙(/api/*, /oauth2/*)에 걸리도록
                         .authenticationMatcher(ServerWebExchangeMatchers.pathMatchers("/oauth2/code/{registrationId}"))
                         .authorizationRequestRepository(authorizationRequestRepository)
                         .authorizedClientRepository(new RequestScopedAuthorizedClientRepository())
@@ -69,9 +65,8 @@ public class SecurityConfig {
     }
 
     /**
-     * Spring Security 6.3 의 StrictServerWebExchangeFirewall 은 요청을 감싸서, 뒤에 오는 필터의 헤더 변경
-     * (⑦ X-User-Id 주입 · ③ 갱신된 Cookie)을 UnsupportedOperationException 으로 막습니다.
-     * Security 는 OAuth2 로그인에만 쓰고 입력 형식 검사는 ⓪ RequestSanityFilter 가 담당하므로 끕니다.
+     * 후속 필터가 요청 헤더를 변경할 수 있도록 기본 Security 방화벽을 비활성화합니다.
+     * 입력 형식 검사는 RequestSanityFilter가 담당합니다.
      */
     @Bean
     public static BeanPostProcessor webFilterChainProxyFirewallDisabler() {
@@ -105,10 +100,7 @@ public class SecurityConfig {
         }
     }
 
-    /**
-     * IdP access_token 은 이 요청 안에서만 둡니다 — 콜백 요청이 끝나면 함께 사라집니다 (11/05 카카오 약관 조회는 폐기 · 쓰는 곳 없음).
-     * 기본 구현은 Pod 메모리에 쌓입니다. Spring Security 는 성공 핸들러보다 먼저 save 를 부릅니다
-     */
+    /** IdP 접근 토큰을 현재 콜백 요청 속성에만 보관합니다. 요청이 끝나면 함께 해제됩니다. */
     private static class RequestScopedAuthorizedClientRepository implements ServerOAuth2AuthorizedClientRepository {
 
         @Override
