@@ -20,7 +20,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
 
 /**
- * 수집 경로 — 하위 서비스의 인스턴스가 전부 내려가 있을 때 (docs/22 §1-4). 재시도 뒤 503 + Retry-After.
+ * 수집 경로 - 하위 서비스의 인스턴스가 전부 내려가 있을 때 (docs/22 §1-4). 재시도 뒤 503 + Retry-After.
  * IngestRoutingTest 는 catalog 인스턴스 하나를 살려 두므로, 전부 닫힌 포트인 경우는 여기서 따로 봅니다.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = {

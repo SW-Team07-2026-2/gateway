@@ -38,11 +38,11 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
 
 /**
- * 수집 경로 라우팅 — 연결 실패 · 응답 지연 (docs/22 §1-4). 가짜 하위 서비스를 띄워 실제 Gateway 라우트로 보냅니다.
+ * 수집 경로 라우팅 - 연결 실패, 응답 지연 (docs/22 §1-4). 가짜 하위 서비스를 띄워 실제 Gateway 라우트로 보냅니다.
  * <pre>
- * catalog  인스턴스 2개 중 1개는 닫힌 포트 → 연결 실패 1회 재시도로 다른 인스턴스 → 200
- * catalog  /internal/catalog/albums 가 3초 걸림 → 응답 타임아웃(테스트 1초) → 504 + Retry-After
- * member   AI 의 회원 데이터 조회 · 저장 → /internal/members/{userId}/** (경로 변수 · 쿼리 · 본문이 그대로)
+ * catalog 인스턴스 2개 중 1개는 닫힌 포트 -> 연결 실패 1회 재시도로 다른 인스턴스 -> 200
+ * catalog /internal/catalog/albums 가 3초 걸림 -> 응답 타임아웃(테스트 1초) -> 504 + Retry-After
+ * member AI 의 회원 데이터 조회, 저장 -> /internal/members/{userId}/** (경로 변수, 쿼리, 본문이 그대로)
  * </pre>
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = {
@@ -113,7 +113,7 @@ class IngestRoutingTest {
         DOWNSTREAM.disposeNow();
     }
 
-    /** 롤링 배포 중 내려간 Pod — 연결 실패는 다른 Pod 로 1회 재시도. 라운드로빈이라 4번 중 최소 1번은 닫힌 포트를 고릅니다 */
+    /** 롤링 배포 중 내려간 Pod - 연결 실패는 다른 Pod 로 1회 재시도. 라운드로빈이라 4번 중 최소 1번은 닫힌 포트를 고릅니다 */
     @Test
     void connectFailureToOnePodIsRetriedOnAnother() throws Exception {
         for (int i = 0; i < 4; i++) {
@@ -137,7 +137,7 @@ class IngestRoutingTest {
         assertThat(Duration.ofNanos(System.nanoTime() - started)).isLessThan(Duration.ofMillis(2500));   // 3초를 기다리지 않음
     }
 
-    /** ALB · Cloudflare 경유(외부)면 서명이 맞아도 404 */
+    /** ALB, Cloudflare 경유(외부)면 서명이 맞아도 404 */
     @Test
     void externalRequestIs404EvenWhenSigned() throws Exception {
         client.post().uri("/ingest/catalog/artists").contentType(MediaType.APPLICATION_JSON)
@@ -148,7 +148,7 @@ class IngestRoutingTest {
         assertThat(RECEIVED).isEmpty();
     }
 
-    /** AI → 회원 메트릭 조회 — 경로 변수와 쿼리가 그대로 Member 내부 경로로 가고, 내부 토큰은 aud=member */
+    /** AI -> 회원 메트릭 조회 - 경로 변수와 쿼리가 그대로 Member 내부 경로로 가고, 내부 토큰은 aud=member */
     @Test
     void memberMetricsReadReachesMemberInternalPath() throws Exception {
         String target = "/ingest/members/42/metrics?metricType=DETAIL_VIEW,DWELL&aggregate=true&limit=10";
@@ -167,7 +167,7 @@ class IngestRoutingTest {
         assertThat(claims.getSubject()).isEqualTo("ingest:ai-test");
     }
 
-    /** AI → 회원 벡터 저장 — PUT 본문이 그대로 */
+    /** AI -> 회원 벡터 저장 - PUT 본문이 그대로 */
     @Test
     void memberEmbeddingWriteReachesMemberInternalPath() throws Exception {
         String target = "/ingest/members/42/embedding";
@@ -182,7 +182,7 @@ class IngestRoutingTest {
         assertThat(RECEIVED.get(0).body()).isEqualTo(VECTOR);
     }
 
-    /** 수집 키로는 회원 데이터 경로가 열리지 않습니다 — Member 까지 가지 않음 */
+    /** 수집 키로는 회원 데이터 경로가 열리지 않습니다 - Member 까지 가지 않음 */
     @Test
     void collectKeyCannotReadMemberData() throws Exception {
         String target = "/ingest/members/42/metrics";

@@ -49,7 +49,7 @@ class CsrfFilterTest {
                 .header(CsrfFilter.HEADER, "abc").build(), ex)).isTrue();
     }
 
-    /** DoD 9 — PG 웹훅은 쿠키가 없습니다 */
+    /** DoD 9 - PG 웹훅은 쿠키가 없습니다 */
     @Test
     void webhookIsExempt() {
         MockServerWebExchange[] ex = new MockServerWebExchange[1];

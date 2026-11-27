@@ -15,8 +15,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.cloud.gateway.support.ServerWebExchangeUtils.GATEWAY_ROUTE_ATTR;
 
 /**
- * member v2 (member-service docs/v2_member_service_re.md §8 Gateway) — 장바구니는 Catalog 로, 새 회원 API 는 기존 member 라우트로,
- * AI 의 회원 데이터 조회 · 저장은 서명 경로(/ingest/members/**)로만 갑니다.
+ * member v2 (member-service docs/v2_member_service_re.md §8 Gateway) - 장바구니는 Catalog 로, 새 회원 API 는 기존 member 라우트로,
+ * AI 의 회원 데이터 조회, 저장은 서명 경로(/ingest/members/**)로만 갑니다.
  */
 @SpringBootTest(properties = {
         "spring.cloud.kubernetes.enabled=false",
@@ -56,12 +56,12 @@ class MemberV2RouteTest {
         assertSigned(HttpMethod.GET, "/ingest/members/42/metrics", "ingest-member_metrics");
         assertSigned(HttpMethod.GET, "/ingest/members/42/embedding", "ingest-member_embedding");
         assertSigned(HttpMethod.PUT, "/ingest/members/42/embedding", "ingest-member_embedding_save");
-        // 매핑에 없는 메서드 · 경로, 내부 경로 그대로는 라우트가 없습니다 (404)
+        // 매핑에 없는 메서드, 경로, 내부 경로 그대로는 라우트가 없습니다 (404)
         assertThat(routeOf(HttpMethod.POST, "/ingest/members/42/metrics")).isNull();
         assertThat(routeOf(HttpMethod.DELETE, "/ingest/members/42/embedding")).isNull();
         assertThat(routeOf(HttpMethod.GET, "/ingest/members/42/profile")).isNull();
         assertThat(routeOf(HttpMethod.GET, "/internal/members/42/metrics")).isNull();
-        assertThat(routeOf(HttpMethod.GET, "/api/members/42/metrics").getId()).isEqualTo("member");   // 사용자 경로 — Member 에 그런 API 가 없어 404
+        assertThat(routeOf(HttpMethod.GET, "/api/members/42/metrics").getId()).isEqualTo("member");   // 사용자 경로 - Member 에 그런 API 가 없어 404
     }
 
     private void assertSigned(HttpMethod method, String path, String routeId) {

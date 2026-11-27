@@ -20,7 +20,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/** ✏️ 11/25 TTL 재조회는 쿨다운(30초)에 한 번만 — Member 가 느리거나 죽어도 요청마다 JWKS 를 다시 부르지 않음 (k6 S7) */
+/** TTL 재조회는 쿨다운(30초)에 한 번만 - Member 가 느리거나 죽어도 요청마다 JWKS 를 다시 부르지 않음 (k6 S7) */
 class JwksKeyStoreTest {
 
     private final AtomicInteger calls = new AtomicInteger();

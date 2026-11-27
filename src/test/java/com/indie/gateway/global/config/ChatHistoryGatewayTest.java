@@ -41,7 +41,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-/** 실제 라우트와 인증 관련 필터 검사. 토큰 검증기·하위 서비스 호출은 대체합니다. */
+/** 실제 라우트와 인증 관련 필터 검사. 토큰 검증기, 하위 서비스 호출은 대체합니다. */
 class ChatHistoryGatewayTest {
 
     private static final String PATH = "/api/members/me/chat-history";

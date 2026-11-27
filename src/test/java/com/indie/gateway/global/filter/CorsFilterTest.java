@@ -18,11 +18,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 class CorsFilterTest {
 
     private static final String FRONT = "http://localhost:5173";
-    private static final String API = "http://localhost:8080";   // 실제 요청은 항상 절대 URI — 상대 경로면 출처 비교가 실패합니다
+    private static final String API = "http://localhost:8080";   // 실제 요청은 항상 절대 URI - 상대 경로면 출처 비교가 실패합니다
 
     private final CorsFilter filter = new CorsFilter(props());
 
-    /** ★ 프리플라이트는 토큰 검사(②)까지 가지 않고 여기서 200 — 쿠키를 실어도 된다(credentials) · CSRF 헤더 허용 */
+    /** 프리플라이트는 토큰 검사(2)까지 가지 않고 여기서 200 - 쿠키를 실어도 된다(credentials), CSRF 헤더 허용 */
     @Test
     void preflightIsAnsweredBeforeTokenCheck() {
         MockServerWebExchange exchange = MockServerWebExchange.from(MockServerHttpRequest.options(API + "/api/auth/signup")
@@ -39,7 +39,7 @@ class CorsFilterTest {
         assertThat(exchange.getResponse().getHeaders().getAccessControlAllowHeaders()).contains("x-xsrf-token");
     }
 
-    /** 실제 요청은 다음 필터로 — 401 같은 거절 응답에도 헤더가 남아 프론트가 읽을 수 있음 */
+    /** 실제 요청은 다음 필터로 - 401 같은 거절 응답에도 헤더가 남아 프론트가 읽을 수 있음 */
     @Test
     void actualRequestGetsHeadersAndContinues() {
         MockServerWebExchange exchange = MockServerWebExchange.from(MockServerHttpRequest.get(API + "/api/auth/me").header("Origin", FRONT));

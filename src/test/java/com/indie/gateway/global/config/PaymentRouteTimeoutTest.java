@@ -19,7 +19,7 @@ import static org.springframework.cloud.gateway.support.RouteMetadataUtils.RESPO
 import static org.springframework.cloud.gateway.support.ServerWebExchangeUtils.GATEWAY_ROUTE_ATTR;
 
 /**
- * ✏️ 11/26 결제 경로 30초 — 굿즈 승인 · 취소는 Payment 가 토스를 최악 26초 기다립니다 (기본 5초면 Gateway 가 먼저 504).
+ * 결제 경로 30초 - 굿즈 승인, 취소는 Payment 가 토스를 최악 26초 기다립니다 (기본 5초면 Gateway 가 먼저 504).
  * 하위 연결 풀은 톰캣 keep-alive(60초)보다 먼저 쉬는 연결을 버립니다.
  */
 @SpringBootTest(properties = {
@@ -46,7 +46,7 @@ class PaymentRouteTimeoutTest {
         }
     }
 
-    /** TimeLimiter 가 기본 5초로 먼저 끊지 않는지 — 6초 걸려도 통과 */
+    /** TimeLimiter 가 기본 5초로 먼저 끊지 않는지 - 6초 걸려도 통과 */
     @Test
     void paymentTimeLimiterDoesNotCutAt5s() {
         String result = circuitBreakers.create("payment")
