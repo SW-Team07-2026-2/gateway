@@ -53,4 +53,8 @@ dependencyManagement {
     imports { mavenBom "org.springframework.cloud:spring-cloud-dependencies:${springCloudVersion}" }
 }
 
-tasks.named('test') { useJUnitPlatform() }
+tasks.named('test') {
+    useJUnitPlatform()
+    // Docker 29 는 API 1.44 미만을 거부합니다 - Testcontainers(docker-java) 기본값이 더 낮아 컨테이너를 못 띄웁니다
+    systemProperty 'api.version', '1.44'
+}
