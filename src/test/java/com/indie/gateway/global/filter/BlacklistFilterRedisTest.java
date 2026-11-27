@@ -1,6 +1,7 @@
 package com.indie.gateway.global.filter;
 
 import com.indie.gateway.domain.auth.entity.TokenClaims;
+import com.indie.gateway.domain.auth.client.MemberAuthClient;
 import com.indie.gateway.global.common.util.GatewayAttributes;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.AfterAll;
@@ -23,6 +24,7 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.*;
 
 /** 실제 Redis 의 MGET - 없는 키가 차단으로 읽히지 않는지, Member 가 쓴 키는 막히는지 */
 @Testcontainers(disabledWithoutDocker = true)
@@ -46,11 +48,17 @@ class BlacklistFilterRedisTest {
         factory.destroy();
     }
 
+    private MemberAuthClient activeMember() {
+        var member = mock(MemberAuthClient.class);
+        when(member.exists(anyString())).thenReturn(Mono.just(true));
+        return member;
+    }
+
     private boolean passes(String userId, String jti) {
         MockServerWebExchange exchange = MockServerWebExchange.from(MockServerHttpRequest.get("/api/cart"));
         exchange.getAttributes().put(GatewayAttributes.CLAIMS, new TokenClaims(userId, List.of("USER"), jti, Instant.now().plusSeconds(1200)));
         AtomicBoolean passed = new AtomicBoolean();
-        new BlacklistFilter(redis, new SimpleMeterRegistry()).filter(exchange, e -> { passed.set(true); return Mono.empty(); }).block();
+        new BlacklistFilter(redis, new SimpleMeterRegistry(), activeMember()).filter(exchange, e -> { passed.set(true); return Mono.empty(); }).block();
         assertThat(passed.get() || exchange.getResponse().getStatusCode() == HttpStatus.UNAUTHORIZED).isTrue();
         return passed.get();
     }

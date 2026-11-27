@@ -81,6 +81,11 @@ public class MemberAuthClient {
         return call(HttpMethod.GET, "/internal/members/" + userId + "/profile", null, ProfileResponse.class);
     }
 
+    /** 탈퇴 표시가 유실됐을 때도 차단하도록 회원 DB의 현재 존재 여부를 조회합니다. */
+    public Mono<Boolean> exists(String userId) {
+        return call(HttpMethod.GET, "/internal/members/" + userId + "/exists", null, Boolean.class);
+    }
+
     /** Member 응답은 ApiResponse - 성공이면 result 를 꺼내고, 실패면 code 로 MemberCallException */
     private <T> Mono<T> call(HttpMethod method, String path, Object body, Class<T> type) {
         ParameterizedTypeReference<ApiResponse<T>> wrapped =
